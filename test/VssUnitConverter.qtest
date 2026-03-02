@@ -3,6 +3,11 @@
 %modern
 
 %requires QUnit
+
+%try-module yaml
+%define NoYaml
+%endtry
+
 %requires ../qlib/VssLoader
 
 %exec-class VssUnitConverterTest
@@ -34,8 +39,10 @@ class VssUnitConverterTest inherits QUnit::Test {
         # Identity conversion
         addTestCase("same unit identity", \testSameUnitIdentity());
 
-        # Custom config tests
+%ifndef NoYaml
+        # Custom config tests (require yaml)
         addTestCase("custom conversion from yaml", \testCustomConversionFromYaml());
+%endif
 
         # Programmatic registration
         addTestCase("register conversion", \testRegisterConversion());
@@ -152,6 +159,7 @@ class VssUnitConverterTest inherits QUnit::Test {
         assertEq(42.0, result);
     }
 
+%ifndef NoYaml
     # Custom config
     testCustomConversionFromYaml() {
         VssUnitConverter conv(test_data_dir + "/custom_units.yaml");
@@ -164,6 +172,7 @@ class VssUnitConverterTest inherits QUnit::Test {
         float inverse = conv.convert(3.785, "liter", "gallon");
         assertTrue(abs(inverse - 1.0) < 0.01);
     }
+%endif
 
     # Programmatic registration
     testRegisterConversion() {

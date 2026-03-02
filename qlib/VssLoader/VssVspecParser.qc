@@ -25,10 +25,32 @@
 public namespace VssLoader {
 
 #! Parses native .vspec files with #include directive support
+/** Reads COVESA VSS \c .vspec files (YAML with \c "#include" directives) and produces
+    a flat map of VSS paths to @ref VssNode definitions. Supports:
+    - Recursive \c "#include" resolution with circular include detection
+    - Mount-point prefixing for included files
+    - Path traversal protection (included files must stay under the base directory)
+
+    @par Loading a Custom Fleet VSS Extension
+    @code{.py}
+    # Parse a fleet-specific VSS extension that adds custom signals
+    VssVspecParser parser("/opt/fleet/vss-extensions/");
+    hash<string, hash<VssNode>> nodes = parser.parseFile("fleet_signals.vspec");
+
+    # fleet_signals.vspec:
+    #   #include obd2_extra.vspec Vehicle.OBD
+    #   Vehicle.Fleet:
+    #     type: branch
+    #     description: Fleet-specific signals
+    @endcode
+*/
 public class VssVspecParser {
     private {
         #! Base directory for resolving relative includes
         string base_dir;
+
+        #! Root directory for path traversal protection (set from the initial parser)
+        string root_dir;
 
         #! Set of already loaded files for circular include detection
         hash<string, bool> loaded_files;
@@ -39,6 +61,7 @@ public class VssVspecParser {
     */
     constructor(string base_dir) {
         self.base_dir = base_dir;
+        self.root_dir = normalize_dir(base_dir);
     }
 
     #! Parses a .vspec file, resolving #include directives recursively
@@ -58,6 +81,14 @@ public class VssVspecParser {
             abs_path = base_dir + "/" + filepath;
         }
         abs_path = normalize_dir(abs_path);
+
+        # path traversal protection: ensure included file stays under the root directory
+        if (abs_path.length() < root_dir.length()
+            || abs_path.substr(0, root_dir.length()) != root_dir) {
+            throw "VSS-PATH-TRAVERSAL",
+                sprintf("include path %y resolves to %y which is outside the base directory %y",
+                    filepath, abs_path, root_dir);
+        }
 
         # check for circular includes
         if (loaded_files{abs_path}) {
@@ -87,6 +118,9 @@ public class VssVspecParser {
 
         # parse the YAML portion
         if (pp.yaml_content.length()) {
+%ifdef NoYaml
+            throw "YAML-MODULE-MISSING", "cannot parse .vspec file; the yaml module is not available";
+%else
             auto parsed;
             try {
                 parsed = parse_yaml(pp.yaml_content);
@@ -100,9 +134,15 @@ public class VssVspecParser {
                 }
                 HashIterator it(parsed);
                 while (it.next()) {
+                    if (it.getValue().typeCode() != NT_HASH) {
+                        throw "VSS-PARSE-ERROR",
+                            sprintf("expected hash for node %y, got type %y", it.getKey(),
+                                it.getValue().type());
+                    }
                     result{it.getKey()} = rawToNode(it.getKey(), it.getValue());
                 }
             }
+%endif
         }
 
         # process includes
@@ -116,6 +156,7 @@ public class VssVspecParser {
 
             # save and restore loaded_files state for the sub-parser
             VssVspecParser sub_parser(dirname(inc_path));
+            sub_parser.root_dir = self.root_dir;
             sub_parser.loaded_files = self.loaded_files;
 
             hash<string, hash<VssNode>> inc_nodes = sub_parser.parseFile(basename(inc_path));
@@ -156,7 +197,7 @@ public class VssVspecParser {
                 if (match) {
                     push includes, {
                         "path": match[0],
-                        "mount_point": match[1] ?? NOTHING,
+                        "mount_point": match[1],
                     };
                 }
             } else {
@@ -199,16 +240,10 @@ public class VssVspecParser {
         }
 
         # build custom metadata: any keys not in the standard set
-        hash<string, bool> standard_keys = {
-            "type": True, "datatype": True, "description": True, "unit": True,
-            "min": True, "max": True, "allowed": True, "default": True,
-            "comment": True, "deprecation": True, "instances": True, "delete": True,
-        };
-
         *hash<string, auto> custom;
         HashIterator it(raw);
         while (it.next()) {
-            if (!standard_keys{it.getKey()}) {
+            if (!VssStandardNodeKeys{it.getKey()}) {
                 if (!exists custom) {
                     custom = {};
                 }
@@ -223,8 +258,8 @@ public class VssVspecParser {
             "datatype": raw.datatype,
             "description": raw.description ?? "",
             "unit": raw.unit,
-            "min": exists raw.min ? float(raw.min) : NOTHING,
-            "max": exists raw.max ? float(raw.max) : NOTHING,
+            "min": exists raw.min ? number(raw.min) : NOTHING,
+            "max": exists raw.max ? number(raw.max) : NOTHING,
             "allowed": raw.allowed,
             "default_value": raw."default",
             "comment": raw.comment,

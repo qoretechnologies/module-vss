@@ -25,9 +25,28 @@
 public namespace VssDataProvider {
 
 #! Browsable VSS catalog data provider
-/** Enables navigating the VSS tree: Vehicle → Cabin → Door → Row1 → ...
-    Branch nodes support children navigation; leaf nodes support request for
-    signal metadata retrieval.
+/** Enables navigating the VSS signal tree hierarchically:
+    Vehicle → Cabin → Door → Row1 → ...
+
+    Branch nodes support children navigation; leaf nodes (sensors, actuators, attributes)
+    are represented as @ref VssSignalDataProvider instances that return signal metadata
+    via the request API.
+
+    @par Fleet Signal Discovery Example
+    @code{.py}
+    # Discover all available powertrain signals for a fleet diagnostics dashboard
+    AbstractDataProvider powertrain = root.getChildProvider("catalog")
+        .getChildProvider("Vehicle").getChildProvider("Powertrain");
+    *list<string> children = powertrain.getChildProviderNames();
+    # ("CombustionEngine", "ElectricMotor", "FuelSystem", "Transmission", ...)
+
+    # Drill into a specific signal to get its metadata
+    AbstractDataProvider rpm = powertrain.getChildProvider("CombustionEngine")
+        .getChildProvider("Speed");
+    hash<auto> meta = rpm.doRequest({});
+    printf("Engine RPM: type=%s, unit=%s, max=%y\n", meta.datatype, meta.unit, meta.max);
+    # Engine RPM: type=uint16, unit=rpm, max=20000
+    @endcode
 */
 public class VssCatalogDataProvider inherits DataProvider::AbstractDataProvider {
     private {
@@ -39,17 +58,24 @@ public class VssCatalogDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates a root catalog provider
+    /** @param tree the loaded VSS tree to browse
+    */
     constructor(VssLoader::VssTree tree) {
         self.tree = tree;
     }
 
-    #! Creates a sub-path catalog provider
+    #! Creates a sub-path catalog provider for a specific branch
+    /** @param tree the loaded VSS tree to browse
+        @param path the current branch path in the tree (e.g. \c "Vehicle.Chassis")
+    */
     constructor(VssLoader::VssTree tree, string path) {
         self.tree = tree;
         self.current_path = path;
     }
 
-    #! Returns the provider name
+    #! Returns the provider name (leaf segment of the current path, or \c "catalog" for root)
+    /** @return the name string
+    */
     string getName() {
         if (exists current_path) {
             # return the last segment
@@ -62,7 +88,9 @@ public class VssCatalogDataProvider inherits DataProvider::AbstractDataProvider 
         return "catalog";
     }
 
-    #! Returns provider description
+    #! Returns the VSS node description for the current path, or a default for root
+    /** @return the description string, or \c "VSS catalog browser" at root level
+    */
     *string getDesc() {
         if (exists current_path) {
             *hash<VssLoader::VssNode> node = tree.getNode(current_path);
@@ -104,6 +132,7 @@ public class VssCatalogDataProvider inherits DataProvider::AbstractDataProvider 
             "desc": getDesc(),
             "type": "VssCatalogDataProvider",
             "supports_children": True,
+            "children_can_support_apis": True,
         };
     }
 }

@@ -22,13 +22,32 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-public namespace VssDataProcessors {
+public namespace VssDataProvider {
 
 #! Renames OEM fields to VSS paths using a field map
 /** Transforms records by renaming keys according to a mapping from OEM-specific
-    field names to standardized VSS paths.
+    field names to standardized VSS paths. Fields not in the mapping are omitted from
+    the output.
 
-    Fields not in the mapping are omitted from the output.
+    This is typically the first stage in a vehicle telemetry data pipeline, converting
+    vendor-specific field names from OBD-II adapters, CAN bus decoders, or proprietary
+    fleet APIs into the standardized COVESA VSS namespace.
+
+    @par OEM Telemetry Normalization Example
+    @code{.py}
+    # Map Scania fleet management API fields to VSS paths
+    VssNormalizeProcessor normalizer({
+        "veh_spd_kph": "Vehicle.Speed",
+        "eng_rpm": "Vehicle.Powertrain.CombustionEngine.Speed",
+        "coolant_temp_c": "Vehicle.Powertrain.CombustionEngine.ECT",
+        "fuel_pct": "Vehicle.Powertrain.FuelSystem.Level",
+        "odo_km": "Vehicle.TraveledDistance",
+    });
+
+    # Input from OEM API: {"veh_spd_kph": 85, "eng_rpm": 2100, "lat": 51.5}
+    # Output (normalized): {"Vehicle.Speed": 85, "Vehicle.Powertrain.CombustionEngine.Speed": 2100}
+    # Note: "lat" is dropped since it has no VSS mapping
+    @endcode
 */
 public class VssNormalizeProcessor inherits DataProvider::AbstractDataProcessor {
     private {
@@ -44,7 +63,10 @@ public class VssNormalizeProcessor inherits DataProvider::AbstractDataProcessor 
         self.field_map = field_map;
     }
 
-    #! Transforms a record by renaming fields
+    #! Transforms a record by renaming OEM fields to VSS paths
+    /** @param enqueue the callback to enqueue the transformed record
+        @param _data the input data; non-hash data is passed through unchanged
+    */
     private auto submitImpl(code enqueue, auto _data) {
         if (_data.typeCode() != NT_HASH) {
             enqueue(_data);
@@ -65,10 +87,12 @@ public class VssNormalizeProcessor inherits DataProvider::AbstractDataProcessor 
         enqueue(result);
     }
 
-    #! Returns the processor capabilities
+    #! Returns the processor capabilities (transform only — all records pass through)
+    /** @return @ref DataProvider::DPC_TRANSFORM
+    */
     private int getProcessorCapabilitiesImpl() {
         return DataProvider::DPC_TRANSFORM;
     }
 }
 
-} # namespace VssDataProcessors
+} # namespace VssDataProvider

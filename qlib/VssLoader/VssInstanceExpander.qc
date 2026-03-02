@@ -25,11 +25,37 @@
 public namespace VssLoader {
 
 #! Expands VSS instance specifications into concrete paths
-/** VSS branches can have an "instances" attribute that defines how the branch
-    should be instantiated (e.g. Row[1,4] creates Row1, Row2, Row3, Row4).
+/** VSS branches can have an \c "instances" attribute that defines how the branch
+    should be instantiated. This class expands all instance specifications in a node
+    map, creating concrete paths for each instance.
 
-    This class expands all instance specifications in a node map, creating
-    concrete paths for each instance.
+    Supported instance specification formats:
+    - String list: \c ["Left", "Right"] → \c Left, \c Right
+    - Numeric range: \c "Row[1,4]" → \c Row1, \c Row2, \c Row3, \c Row4
+    - Multi-dimensional: \c [["Row1", "Row2"], ["Left", "Right"]] →
+      \c Row1.Left, \c Row1.Right, \c Row2.Left, \c Row2.Right
+
+    @par Vehicle Door Instance Expansion Example
+    @code{.py}
+    # A VSS catalog with Door instances: Door[Row1,Row2] x [Left,Right]
+    # Before expansion:
+    #   Vehicle.Cabin.Door (branch, instances: [["Row1", "Row2"], ["Left", "Right"]])
+    #     Vehicle.Cabin.Door.IsOpen (sensor, boolean)
+
+    hash<string, hash<VssNode>> expanded = VssInstanceExpander::expandAll(nodes);
+
+    # After expansion, concrete paths are created:
+    #   Vehicle.Cabin.Door                         (branch, instances removed)
+    #   Vehicle.Cabin.Door.Row1                    (intermediate branch)
+    #   Vehicle.Cabin.Door.Row1.Left               (branch, copy of Door template)
+    #   Vehicle.Cabin.Door.Row1.Left.IsOpen        (sensor, copy of Door.IsOpen)
+    #   Vehicle.Cabin.Door.Row1.Right              (branch)
+    #   Vehicle.Cabin.Door.Row1.Right.IsOpen       (sensor)
+    #   Vehicle.Cabin.Door.Row2.Left               (branch)
+    #   Vehicle.Cabin.Door.Row2.Left.IsOpen        (sensor)
+    #   Vehicle.Cabin.Door.Row2.Right              (branch)
+    #   Vehicle.Cabin.Door.Row2.Right.IsOpen       (sensor)
+    @endcode
 */
 public class VssInstanceExpander {
     #! Expands all instance specifications in the given node map
@@ -81,29 +107,28 @@ public class VssInstanceExpander {
                 }
             }
 
-            # create expanded instances
+            # create expanded instances nested under the branch
             foreach string inst_name in (instance_names) {
-                # create the instance branch node
-                string inst_path = branch_path.substr(0, branch_path.length() - branch.name.length())
-                    + inst_name;
-                if (inst_path =~ /^\./) {
-                    inst_path = inst_path.substr(1);
-                }
+                string new_branch_path = branch_path + "." + inst_name;
 
-                # determine the correct parent path prefix
-                # the instance replaces the branch name segment in the path
-                string parent_prefix;
-                int last_dot = branch_path.rfind(".");
-                if (last_dot >= 0) {
-                    parent_prefix = branch_path.substr(0, last_dot) + ".";
-                } else {
-                    parent_prefix = "";
+                # for multi-dimensional instances (e.g. "Row1.DriverSide"), create
+                # intermediate branch nodes for each dimension
+                list<string> segments = inst_name.split(".");
+                string current_path = branch_path;
+                for (int s = 0; s < segments.size() - 1; s++) {
+                    current_path += "." + segments[s];
+                    if (!exists result{current_path}) {
+                        result{current_path} = <VssNode>{
+                            "name": segments[s],
+                            "path": current_path,
+                            "type": VssNodeType_BRANCH,
+                            "description": sprintf("Instance dimension %y", segments[s]),
+                        };
+                    }
                 }
-
-                string new_branch_path = parent_prefix + inst_name;
 
                 hash<VssNode> inst_branch = branch;
-                inst_branch.name = inst_name;
+                inst_branch.name = segments[segments.size() - 1];
                 inst_branch.path = new_branch_path;
                 delete inst_branch.instances;
                 result{new_branch_path} = inst_branch;
@@ -119,8 +144,12 @@ public class VssInstanceExpander {
                 }
             }
 
-            # remove original template branch and its children
-            delete result{branch_path};
+            # keep the original branch but remove its instances attribute
+            hash<VssNode> cleaned_branch = result{branch_path};
+            delete cleaned_branch.instances;
+            result{branch_path} = cleaned_branch;
+
+            # remove template children (they've been duplicated under each instance)
             foreach string child_path in (child_paths) {
                 delete result{child_path};
             }

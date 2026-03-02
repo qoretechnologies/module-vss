@@ -1,0 +1,354 @@
+#!/usr/bin/env qore
+
+%modern
+
+%requires QUnit
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../qlib/VssLoader
+%requires DataProvider
+%requires FileLocationHandler
+%requires ../qlib/VssDataProvider
+
+%exec-class VssReadDataProviderTest
+
+class VssReadDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("VssReadDataProviderTest", "1.0") {
+        test_data_dir = get_script_dir() + "/data";
+
+        # Common tests (no module guards needed)
+        addTestCase("provider info", \testProviderInfo());
+        addTestCase("missing input source", \testMissingInputSource());
+        addTestCase("conflicting input sources", \testConflictingInputSources());
+        addTestCase("unknown format", \testUnknownFormat());
+        addTestCase("format auto-detection", \testFormatAutoDetection());
+
+%ifndef NoJson
+        # JSON reading tests
+        addTestCase("json read from path", \testJsonReadFromPath());
+        addTestCase("json read from inline data", \testJsonReadFromInlineData());
+        addTestCase("json read from stream", \testJsonReadFromStream());
+        addTestCase("json verify field values", \testJsonVerifyFieldValues());
+        addTestCase("json search with where_cond", \testJsonSearchWithWhereCond());
+        addTestCase("json search with limit", \testJsonSearchWithLimit());
+        addTestCase("json empty array", \testJsonEmptyArray());
+        addTestCase("json single record", \testJsonSingleRecord());
+        addTestCase("json nested values", \testJsonNestedValues());
+        addTestCase("json format auto-detect from extension", \testJsonAutoDetectExtension());
+        addTestCase("json single top-level object", \testJsonSingleObject());
+        addTestCase("json multiple searches on same provider", \testJsonMultipleSearches());
+%endif
+
+%ifndef NoYaml
+        # YAML reading tests
+        addTestCase("yaml read from path", \testYamlReadFromPath());
+        addTestCase("yaml read from inline data", \testYamlReadFromInlineData());
+        addTestCase("yaml verify field values", \testYamlVerifyFieldValues());
+        addTestCase("yaml format auto-detect from extension", \testYamlAutoDetectExtension());
+        addTestCase("yaml sequence of mappings format", \testYamlSequenceOfMappings());
+        addTestCase("yaml nested values", \testYamlNestedValues());
+        addTestCase("yaml empty input", \testYamlEmptyInput());
+        addTestCase("yaml multiple searches on same provider", \testYamlMultipleSearches());
+%endif
+
+%ifdef NoJson
+        addTestCase("json module missing error", \testJsonModuleMissing());
+%endif
+
+%ifdef NoYaml
+        addTestCase("yaml module missing error", \testYamlModuleMissing());
+%endif
+
+        set_return_value(main());
+    }
+
+    # --- Common tests ---
+
+    testProviderInfo() {
+        hash<DataProviderInfo> info = VssReadDataProvider::ProviderInfo;
+        assertTrue(info.supports_read);
+        assertTrue(info.has_record);
+        assertEq("VssReadDataProvider", info.type);
+        assertTrue(exists info.constructor_options);
+        assertTrue(exists info.constructor_options.path);
+        assertTrue(exists info.constructor_options.stream);
+        assertTrue(exists info.constructor_options.data);
+        assertTrue(exists info.constructor_options.format);
+    }
+
+    testMissingInputSource() {
+        assertThrows("VSS-READ-ERROR", "required", sub () {
+            new VssReadDataProvider({});
+        });
+        assertThrows("VSS-READ-ERROR", "required", sub () {
+            new VssReadDataProvider();
+        });
+    }
+
+    testConflictingInputSources() {
+        assertThrows("VSS-READ-ERROR", "mutually exclusive", sub () {
+            new VssReadDataProvider({
+                "path": "/tmp/test.json",
+                "data": "[]",
+            });
+        });
+    }
+
+    testUnknownFormat() {
+        assertThrows("VSS-FORMAT-ERROR", sub () {
+            new VssReadDataProvider({
+                "data": "test",
+                "format": "xml",
+            });
+        });
+    }
+
+    testFormatAutoDetection() {
+        # Can't auto-detect format from inline data without format option
+        assertThrows("VSS-FORMAT-ERROR", "cannot determine", sub () {
+            new VssReadDataProvider({"data": "[]"});
+        });
+    }
+
+%ifndef NoJson
+    # --- JSON reading tests ---
+
+    testJsonReadFromPath() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(5, records.size());
+    }
+
+    testJsonReadFromInlineData() {
+        string json_data = '[{"Vehicle.Speed": 10.0}, {"Vehicle.Speed": 20.0}]';
+        VssReadDataProvider provider({"data": json_data, "format": "json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(2, records.size());
+        assertEq(10.0, records[0]{"Vehicle.Speed"});
+        assertEq(20.0, records[1]{"Vehicle.Speed"});
+    }
+
+    testJsonReadFromStream() {
+        string json_data = '[{"Vehicle.Speed": 55.5}]';
+        InputStream stream = new StringInputStream(json_data);
+        VssReadDataProvider provider({"stream": stream, "format": "json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(1, records.size());
+        assertEq(55.5, records[0]{"Vehicle.Speed"});
+    }
+
+    testJsonVerifyFieldValues() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+
+        # First record
+        assertEq(0.0, records[0]{"Vehicle.Speed"});
+        assertEq(False, records[0]{"Vehicle.IsMoving"});
+
+        # Second record
+        assertEq(45.5, records[1]{"Vehicle.Speed"});
+        assertEq(True, records[1]{"Vehicle.IsMoving"});
+        assertEq(82, records[1]{"Vehicle.Powertrain.FuelSystem.Level"});
+
+        # Last record
+        assertEq(0.0, records[4]{"Vehicle.Speed"});
+        assertEq(False, records[4]{"Vehicle.IsMoving"});
+        assertEq("WDB1234567890ABCD", records[4]{"Vehicle.VehicleIdentification.VIN"});
+    }
+
+    testJsonSearchWithWhereCond() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.json"});
+        # Use simple equality filter (dynamic-schema providers don't support search expressions)
+        list<hash<auto>> records = map $1, provider.searchRecords(
+            {"Vehicle.IsMoving": False}
+        );
+        assertEq(2, records.size());
+        assertEq(0.0, records[0]{"Vehicle.Speed"});
+        assertEq(0.0, records[1]{"Vehicle.Speed"});
+
+        # Verify manual filtering for complex conditions
+        VssReadDataProvider provider2({"path": test_data_dir + "/vss_telemetry.json"});
+        list<hash<auto>> all_records = map $1, provider2.searchRecords();
+        list<hash<auto>> fast_records = select all_records, ($1{"Vehicle.Speed"} > 100);
+        assertEq(1, fast_records.size());
+        assertEq(120.3, fast_records[0]{"Vehicle.Speed"});
+    }
+
+    testJsonSearchWithLimit() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.json"});
+        list<hash<auto>> records = map $1, provider.searchRecords(NOTHING, {"limit": 3});
+        assertEq(3, records.size());
+    }
+
+    testJsonEmptyArray() {
+        VssReadDataProvider provider({"data": "[]", "format": "json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(0, records.size());
+    }
+
+    testJsonSingleRecord() {
+        string json_data = '[{"Vehicle.Speed": 42.0}]';
+        VssReadDataProvider provider({"data": json_data, "format": "json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(1, records.size());
+        assertEq(42.0, records[0]{"Vehicle.Speed"});
+    }
+
+    testJsonNestedValues() {
+        string json_data = '[{"signal": "Vehicle.Speed", "meta": {"unit": "km/h", "range": [0, 300]}}]';
+        VssReadDataProvider provider({"data": json_data, "format": "json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Vehicle.Speed", records[0].signal);
+        assertEq("km/h", records[0].meta.unit);
+        assertEq((0, 300), records[0].meta.range);
+    }
+
+    testJsonAutoDetectExtension() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(5, records.size());
+    }
+
+    testJsonSingleObject() {
+        string json_data = '{"Vehicle.Speed": 77.0, "Vehicle.IsMoving": true}';
+        VssReadDataProvider provider({"data": json_data, "format": "json"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(1, records.size());
+        assertEq(77.0, records[0]{"Vehicle.Speed"});
+        assertEq(True, records[0]{"Vehicle.IsMoving"});
+    }
+
+    testJsonMultipleSearches() {
+        string json_data = '[{"Vehicle.Speed": 10.0}, {"Vehicle.Speed": 20.0}, {"Vehicle.Speed": 30.0}]';
+        VssReadDataProvider provider({"data": json_data, "format": "json"});
+
+        # first search
+        list<hash<auto>> records1 = map $1, provider.searchRecords();
+        assertEq(3, records1.size());
+
+        # second search on the same provider must return the same results
+        list<hash<auto>> records2 = map $1, provider.searchRecords();
+        assertEq(3, records2.size());
+        assertEq(10.0, records2[0]{"Vehicle.Speed"});
+        assertEq(30.0, records2[2]{"Vehicle.Speed"});
+
+        # search with filter also works on re-read
+        list<hash<auto>> records3 = map $1, provider.searchRecords(NOTHING, {"limit": 2});
+        assertEq(2, records3.size());
+    }
+%endif
+
+%ifndef NoYaml
+    # --- YAML reading tests ---
+
+    testYamlReadFromPath() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.yaml"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(5, records.size());
+    }
+
+    testYamlReadFromInlineData() {
+        string yaml_data = "---\nVehicle.Speed: 10.0\n---\nVehicle.Speed: 20.0\n";
+        VssReadDataProvider provider({"data": yaml_data, "format": "yaml"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(2, records.size());
+        assertEq(10.0, records[0]{"Vehicle.Speed"});
+        assertEq(20.0, records[1]{"Vehicle.Speed"});
+    }
+
+    testYamlVerifyFieldValues() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.yaml"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+
+        # First record
+        assertEq(0.0, records[0]{"Vehicle.Speed"});
+        assertEq(False, records[0]{"Vehicle.IsMoving"});
+
+        # Second record
+        assertEq(45.5, records[1]{"Vehicle.Speed"});
+        assertEq(True, records[1]{"Vehicle.IsMoving"});
+        assertEq(82, records[1]{"Vehicle.Powertrain.FuelSystem.Level"});
+
+        # Last record
+        assertEq(0.0, records[4]{"Vehicle.Speed"});
+        assertEq(False, records[4]{"Vehicle.IsMoving"});
+        assertEq("WDB1234567890ABCD", records[4]{"Vehicle.VehicleIdentification.VIN"});
+    }
+
+    testYamlAutoDetectExtension() {
+        VssReadDataProvider provider({"path": test_data_dir + "/vss_telemetry.yaml"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(5, records.size());
+    }
+
+    testYamlSequenceOfMappings() {
+        string yaml_data = "- Vehicle.Speed: 10.0\n  Vehicle.IsMoving: false\n- Vehicle.Speed: 20.0\n  Vehicle.IsMoving: true\n";
+        VssReadDataProvider provider({"data": yaml_data, "format": "yaml"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(2, records.size());
+        assertEq(10.0, records[0]{"Vehicle.Speed"});
+        assertEq(False, records[0]{"Vehicle.IsMoving"});
+        assertEq(20.0, records[1]{"Vehicle.Speed"});
+        assertEq(True, records[1]{"Vehicle.IsMoving"});
+    }
+
+    testYamlNestedValues() {
+        string yaml_data = "---\nsignal: Vehicle.Speed\nmeta:\n  unit: km/h\n  range:\n    - 0\n    - 300\n";
+        VssReadDataProvider provider({"data": yaml_data, "format": "yaml"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Vehicle.Speed", records[0].signal);
+        assertEq("km/h", records[0].meta.unit);
+        assertEq((0, 300), records[0].meta.range);
+    }
+
+    testYamlEmptyInput() {
+        VssReadDataProvider provider({"data": "", "format": "yaml"});
+        list<hash<auto>> records = map $1, provider.searchRecords();
+        assertEq(0, records.size());
+    }
+
+    testYamlMultipleSearches() {
+        string yaml_data = "---\nVehicle.Speed: 10.0\n---\nVehicle.Speed: 20.0\n";
+        VssReadDataProvider provider({"data": yaml_data, "format": "yaml"});
+
+        # first search
+        list<hash<auto>> records1 = map $1, provider.searchRecords();
+        assertEq(2, records1.size());
+
+        # second search on the same provider must return the same results
+        list<hash<auto>> records2 = map $1, provider.searchRecords();
+        assertEq(2, records2.size());
+        assertEq(10.0, records2[0]{"Vehicle.Speed"});
+        assertEq(20.0, records2[1]{"Vehicle.Speed"});
+    }
+%endif
+
+%ifdef NoJson
+    testJsonModuleMissing() {
+        assertThrows("JSON-MODULE-MISSING", sub () {
+            new VssReadDataProvider({"data": "[]", "format": "json"});
+        });
+    }
+%endif
+
+%ifdef NoYaml
+    testYamlModuleMissing() {
+        assertThrows("YAML-MODULE-MISSING", sub () {
+            new VssReadDataProvider({"data": "", "format": "yaml"});
+        });
+    }
+%endif
+}

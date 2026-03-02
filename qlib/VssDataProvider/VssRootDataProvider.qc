@@ -24,15 +24,47 @@
 
 public namespace VssDataProvider {
 
-#! Root VSS data provider with children "catalog" and "validate"
+#! Root VSS data provider with children \c "catalog" and \c "validate"
+/** Entry point for browsing VSS signal catalogs and validating telemetry data through
+    the DataProvider framework. Loads a VSS catalog from a JSON, YAML, or native .vspec
+    file and exposes two child providers:
+
+    - \c "catalog" — a browsable tree of VSS branches and signals
+      (@ref VssCatalogDataProvider)
+    - \c "validate" — a request-response provider for signal value validation
+      (@ref VssValidationDataProvider)
+
+    @par Fleet Telematics Example
+    @code{.py}
+    # Load the COVESA VSS catalog for a fleet management platform
+    VssRootDataProvider root({"catalog_path": "/opt/fleet/vss_rel_4.0.yaml"});
+
+    # Browse the catalog to discover available signals under Vehicle.Chassis
+    AbstractDataProvider chassis = root.getChildProvider("catalog")
+        .getChildProvider("Vehicle").getChildProvider("Chassis");
+    *list<string> children = chassis.getChildProviderNames();
+    # ("Accelerator", "Brake", "SteeringWheel", ...)
+
+    # Validate incoming OBD-II speed reading
+    AbstractDataProvider validator = root.getChildProvider("validate");
+    hash<auto> result = validator.doRequest({
+        "path": "Vehicle.Speed",
+        "value": 85,
+    });
+    printf("Valid: %y\n", result.valid); # Valid: True
+    @endcode
+*/
 public class VssRootDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider information
         const ProviderInfo = <DataProviderInfo>{
             "name": "vss",
-            "desc": "COVESA VSS catalog data provider",
+            "desc": "COVESA Vehicle Signal Specification (VSS) catalog data provider.\n\n"
+                "Provides browsable tree navigation of VSS signal catalogs and data "
+                "validation against VSS signal definitions",
             "type": "VssRootDataProvider",
             "supports_children": True,
+            "children_can_support_apis": True,
             "constructor_options": ConstructorOptions,
         };
 
@@ -42,15 +74,18 @@ public class VssRootDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Catalog Path",
                 "short_desc": "Path to VSS catalog file",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Path to the VSS catalog file (JSON, YAML, or .vspec format)",
+                "desc": "Path to the VSS catalog file. Supported formats:\n"
+                    "- `.json` — pre-exported VSS JSON catalog\n"
+                    "- `.yaml` / `.yml` — pre-exported VSS YAML catalog\n"
+                    "- `.vspec` — native VSS specification file with `#include` support",
                 "required": True,
                 "example_value": "/path/to/vss_v6.yaml",
             },
             "vss_version": <DataProviderOptionInfo>{
                 "display_name": "VSS Version",
                 "short_desc": "VSS specification version",
-                "type": AbstractDataProviderTypeMap."string",
-                "desc": "Version of the VSS specification (informational)",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Version of the VSS specification (informational only)",
                 "default_value": "unknown",
             },
         };
@@ -74,13 +109,17 @@ public class VssRootDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns the provider name
+    /** @return \c "vss"
+    */
     string getName() {
         return "vss";
     }
 
-    #! Returns provider description
+    #! Returns a human-readable provider description
+    /** @return the provider description string
+    */
     *string getDesc() {
-        return "COVESA VSS catalog data provider";
+        return "COVESA Vehicle Signal Specification (VSS) catalog data provider";
     }
 
     #! Returns the list of child provider names

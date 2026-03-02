@@ -23,9 +23,15 @@
 */
 
 %requires qore >= 2.0
-%requires yaml
-%requires json
 %requires Util
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
 
 %modern
 
@@ -42,16 +48,57 @@ module VssLoader {
     @section vssloaderintro Introduction
 
     The %VssLoader module provides core functionality for loading, parsing,
-    and validating COVESA Vehicle Signal Specification (VSS) data.
+    and validating COVESA Vehicle Signal Specification (VSS) data. It is the
+    foundation for the @ref VssDataProvider module and can also be used
+    independently for fleet management, IoT telemetry validation, and
+    vehicle data processing.
+
+    @section vssloaderquickstart Quick Start
+
+    @code{.py}
+    %requires VssLoader
+
+    # Load a VSS catalog
+    VssTree tree("/opt/fleet/catalogs/vss_rel_4.0.yaml");
+    printf("Loaded %d signals\n", tree.size());
+
+    # Look up signal metadata
+    *hash<VssNode> speed = tree.getNode("Vehicle.Speed");
+    printf("Speed: unit=%s, range=[%y, %y]\n", speed.unit, speed.min, speed.max);
+
+    # Validate telemetry data from fleet vehicles
+    VssValidator validator(tree);
+    list<hash<VssValidationError>> errors = validator.validateRecord({
+        "Vehicle.Speed": 85,
+        "Vehicle.Powertrain.CombustionEngine.ECT": 90,
+    });
+    printf("Valid: %y\n", errors.empty());
+
+    # Convert units for multi-region fleet dashboards
+    VssUnitConverter converter();
+    float mph = converter.convert(100.0, "km/h", "mph");
+    @endcode
 
     @section vssloaderclasses Classes
 
-    - @ref VssLoader::VssVspecParser "VssVspecParser" - Native .vspec file parser
-    - @ref VssLoader::VssTree "VssTree" - Resolved VSS signal tree
-    - @ref VssLoader::VssInstanceExpander "VssInstanceExpander" - Instance expansion
-    - @ref VssLoader::VssOverlayMerger "VssOverlayMerger" - Overlay merge operations
-    - @ref VssLoader::VssValidator "VssValidator" - Signal data validator
-    - @ref VssLoader::VssUnitConverter "VssUnitConverter" - Unit conversion
+    - @ref VssLoader::VssVspecParser "VssVspecParser" - Native .vspec file parser with
+      \c "#include" support
+    - @ref VssLoader::VssTree "VssTree" - Resolved VSS signal tree with navigation and
+      glob-based path queries
+    - @ref VssLoader::VssInstanceExpander "VssInstanceExpander" - Expands instance
+      specifications (e.g., Door[Row1,Row2][Left,Right]) into concrete paths
+    - @ref VssLoader::VssOverlayMerger "VssOverlayMerger" - Merges VSS overlays for
+      fleet-specific catalog customization
+    - @ref VssLoader::VssValidator "VssValidator" - Validates signal values against
+      type, range, and enum constraints
+    - @ref VssLoader::VssUnitConverter "VssUnitConverter" - Extensible unit conversion
+      with built-in automotive conversions
+
+    @section vssloadertypes Type Definitions
+
+    - @ref VssLoader::VssNode "VssNode" - Signal/branch node metadata
+    - @ref VssLoader::VssValidationError "VssValidationError" - Validation error details
+    - @ref VssLoader::VssUnitConversion "VssUnitConversion" - Unit conversion specification
 */
 
 public namespace VssLoader {

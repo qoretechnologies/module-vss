@@ -3,6 +3,15 @@
 %modern
 
 %requires QUnit
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
 %requires ../qlib/VssLoader
 
 %exec-class VssLoaderTest
@@ -15,21 +24,31 @@ class VssLoaderTest inherits QUnit::Test {
     constructor() : Test("VssLoaderTest", "1.0") {
         test_data_dir = get_script_dir() + "/data";
 
-        # VssConstants tests
+        # VssConstants tests (no yaml/json dependency)
         addTestCase("type map correctness", \testTypeMapCorrectness());
         addTestCase("type ranges correctness", \testTypeRangesCorrectness());
 
-        # VssVspecParser tests
+        # VssInstanceExpander tests (no yaml/json dependency)
+        addTestCase("instance expansion list", \testInstanceExpansionList());
+        addTestCase("instance expansion range", \testInstanceExpansionRange());
+        addTestCase("parseInstanceSpec", \testParseInstanceSpec());
+        addTestCase("cartesian product", \testCartesianProduct());
+
+        # Tree from node map (no yaml/json dependency)
+        addTestCase("tree from node map", \testTreeFromNodeMap());
+
+%ifndef NoYaml
+        # VssVspecParser tests (require yaml)
         addTestCase("parse basic vspec", \testParseBasicVspec());
         addTestCase("parse with includes", \testParseWithIncludes());
         addTestCase("circular include detection", \testCircularIncludeDetection());
         addTestCase("malformed yaml", \testMalformedYaml());
         addTestCase("unknown node type", \testUnknownNodeType());
         addTestCase("missing type field", \testMissingTypeField());
+        addTestCase("path traversal prevention", \testPathTraversalPrevention());
 
-        # VssTree tests
+        # VssTree tests (require yaml)
         addTestCase("tree from yaml", \testTreeFromYaml());
-        addTestCase("tree from json", \testTreeFromJson());
         addTestCase("tree from vspec", \testTreeFromVspec());
         addTestCase("tree getNode", \testTreeGetNode());
         addTestCase("tree hasPath", \testTreeHasPath());
@@ -38,26 +57,28 @@ class VssLoaderTest inherits QUnit::Test {
         addTestCase("tree getLeafNodes", \testTreeGetLeafNodes());
         addTestCase("tree findPaths", \testTreeFindPaths());
         addTestCase("tree size", \testTreeSize());
+        addTestCase("tree getAllNodes", \testTreeGetAllNodes());
 
-        # VssInstanceExpander tests
+        # VssInstanceExpander from file (requires yaml)
         addTestCase("instance expansion multi-dimensional", \testInstanceExpansionMultiDim());
-        addTestCase("instance expansion list", \testInstanceExpansionList());
-        addTestCase("instance expansion range", \testInstanceExpansionRange());
-        addTestCase("parseInstanceSpec", \testParseInstanceSpec());
-        addTestCase("cartesian product", \testCartesianProduct());
 
-        # VssOverlayMerger tests
+        # VssOverlayMerger tests (require yaml)
         addTestCase("overlay attribute override", \testOverlayAttributeOverride());
         addTestCase("overlay add new path", \testOverlayAddNewPath());
         addTestCase("overlay delete", \testOverlayDelete());
         addTestCase("overlay delete with children", \testOverlayDeleteWithChildren());
         addTestCase("multiple overlays", \testMultipleOverlays());
 
-        # Corner cases
+        # Corner cases (require yaml)
         addTestCase("empty vspec", \testEmptyVspec());
         addTestCase("node with all optional attributes", \testNodeAllOptionalAttributes());
         addTestCase("custom OEM metadata preserved", \testCustomOemMetadata());
-        addTestCase("tree from node map", \testTreeFromNodeMap());
+%endif
+
+%ifndef NoJson
+        # VssTree JSON tests (require json)
+        addTestCase("tree from json", \testTreeFromJson());
+%endif
 
         set_return_value(main());
     }
@@ -90,6 +111,7 @@ class VssLoaderTest inherits QUnit::Test {
         assertEq(32767, VssTypeRanges."int16".max);
     }
 
+%ifndef NoYaml
     # VssVspecParser tests
     testParseBasicVspec() {
         VssVspecParser parser(test_data_dir);
@@ -110,8 +132,8 @@ class VssLoaderTest inherits QUnit::Test {
         # check leaf node details
         assertEq("float", nodes."Vehicle.Speed".datatype);
         assertEq("km/h", nodes."Vehicle.Speed".unit);
-        assertEq(0.0, nodes."Vehicle.Speed".min);
-        assertEq(300.0, nodes."Vehicle.Speed".max);
+        assertEq(0n, nodes."Vehicle.Speed".min);
+        assertEq(300n, nodes."Vehicle.Speed".max);
 
         # check name extraction
         assertEq("Vehicle", nodes."Vehicle".name);
@@ -181,16 +203,42 @@ class VssLoaderTest inherits QUnit::Test {
         });
     }
 
+    testPathTraversalPrevention() {
+        # create a temp directory structure with a traversal include
+        string tmp_dir = "/tmp/vss_traversal_test";
+        string sub_dir = tmp_dir + "/sub";
+        mkdir(tmp_dir, 0755);
+        mkdir(sub_dir, 0755);
+        on_exit {
+            unlink(sub_dir + "/main.vspec");
+            unlink(tmp_dir + "/secret.vspec");
+            rmdir(sub_dir);
+            rmdir(tmp_dir);
+        }
+
+        # write a file outside the sub directory
+        {
+            File f();
+            f.open2(tmp_dir + "/secret.vspec", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("Secret:\n  type: sensor\n  datatype: string\n  description: secret\n");
+        }
+
+        # write a main file in sub that tries to include a file outside via ../
+        {
+            File f();
+            f.open2(sub_dir + "/main.vspec", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("#include ../secret.vspec\nRoot:\n  type: branch\n  description: test\n");
+        }
+
+        VssVspecParser parser(sub_dir);
+        assertThrows("VSS-PATH-TRAVERSAL", sub () {
+            parser.parseFile("main.vspec");
+        });
+    }
+
     # VssTree tests
     testTreeFromYaml() {
         VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
-        assertTrue(tree.size() > 0);
-        assertTrue(tree.hasPath("Vehicle"));
-        assertTrue(tree.hasPath("Vehicle.Speed"));
-    }
-
-    testTreeFromJson() {
-        VssTree tree(test_data_dir + "/vss_v6_subset.json");
         assertTrue(tree.size() > 0);
         assertTrue(tree.hasPath("Vehicle"));
         assertTrue(tree.hasPath("Vehicle.Speed"));
@@ -288,6 +336,28 @@ class VssLoaderTest inherits QUnit::Test {
         assertEq(6, tree.size());
     }
 
+    testTreeGetAllNodes() {
+        VssTree tree(test_data_dir + "/basic.vspec");
+        hash<string, hash<VssNode>> all = tree.getAllNodes();
+
+        # size must match
+        assertEq(tree.size(), all.size());
+
+        # all expected paths are present
+        assertTrue(exists all."Vehicle");
+        assertTrue(exists all."Vehicle.Speed");
+        assertTrue(exists all."Vehicle.IsMoving");
+        assertTrue(exists all."Vehicle.VehicleIdentification.VIN");
+
+        # returned nodes have correct types
+        assertEq("branch", all."Vehicle".type);
+        assertEq("sensor", all."Vehicle.Speed".type);
+        assertEq("attribute", all."Vehicle.VehicleIdentification.VIN".type);
+
+        # returned nodes have correct paths
+        assertEq("Vehicle.Speed", all."Vehicle.Speed".path);
+    }
+
     # VssInstanceExpander tests
     testInstanceExpansionMultiDim() {
         VssVspecParser parser(test_data_dir);
@@ -295,22 +365,30 @@ class VssLoaderTest inherits QUnit::Test {
 
         hash<string, hash<VssNode>> expanded = VssInstanceExpander::expandAll(nodes);
 
-        # the Door branch should be expanded into Row1.DriverSide, Row1.PassengerSide,
-        # Row2.DriverSide, Row2.PassengerSide
-        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide");
-        assertTrue(exists expanded."Vehicle.Cabin.Row1.PassengerSide");
-        assertTrue(exists expanded."Vehicle.Cabin.Row2.DriverSide");
-        assertTrue(exists expanded."Vehicle.Cabin.Row2.PassengerSide");
+        # the Door branch should be kept; instances nested under it
+        assertTrue(exists expanded."Vehicle.Cabin.Door");
+        assertFalse(exists expanded."Vehicle.Cabin.Door".instances);
+
+        # intermediate dimension branches should be created
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row1");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row2");
+        assertEq("branch", expanded."Vehicle.Cabin.Door.Row1".type);
+
+        # final instance branches under each dimension
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row1.DriverSide");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row1.PassengerSide");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row2.DriverSide");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row2.PassengerSide");
 
         # children should be duplicated under each instance
-        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide.IsOpen");
-        assertTrue(exists expanded."Vehicle.Cabin.Row2.PassengerSide.IsLocked");
-        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide.Window");
-        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide.Window.Position");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row1.DriverSide.IsOpen");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row1.DriverSide.Window");
+        assertTrue(exists expanded."Vehicle.Cabin.Door.Row1.DriverSide.Window.Position");
 
-        # original template should be removed
-        assertFalse(exists expanded."Vehicle.Cabin.Door");
+        # template children should be removed
         assertFalse(exists expanded."Vehicle.Cabin.Door.IsOpen");
+        assertFalse(exists expanded."Vehicle.Cabin.Door.Window");
     }
 
     testInstanceExpansionList() {
@@ -333,11 +411,16 @@ class VssLoaderTest inherits QUnit::Test {
 
         hash<string, hash<VssNode>> expanded = VssInstanceExpander::expandAll(nodes);
 
-        assertTrue(exists expanded."Vehicle.Chassis.Row1");
-        assertTrue(exists expanded."Vehicle.Chassis.Row2");
-        assertTrue(exists expanded."Vehicle.Chassis.Row1.Speed");
-        assertTrue(exists expanded."Vehicle.Chassis.Row2.Speed");
-        assertFalse(exists expanded."Vehicle.Chassis.Axle");
+        # Axle branch is kept; instances nested under it
+        assertTrue(exists expanded."Vehicle.Chassis.Axle");
+        assertFalse(exists expanded."Vehicle.Chassis.Axle".instances);
+        assertTrue(exists expanded."Vehicle.Chassis.Axle.Row1");
+        assertTrue(exists expanded."Vehicle.Chassis.Axle.Row2");
+        assertTrue(exists expanded."Vehicle.Chassis.Axle.Row1.Speed");
+        assertTrue(exists expanded."Vehicle.Chassis.Axle.Row2.Speed");
+
+        # template children removed
+        assertFalse(exists expanded."Vehicle.Chassis.Axle.Speed");
     }
 
     testInstanceExpansionRange() {
@@ -393,7 +476,7 @@ class VssLoaderTest inherits QUnit::Test {
         hash<string, hash<VssNode>> merged = VssOverlayMerger::applyOverlay(base, overlay);
 
         # Speed max should be overridden to 350
-        assertEq(350.0, merged."Vehicle.Speed".max);
+        assertEq(350n, merged."Vehicle.Speed".max);
         # description should be overridden
         assertEq("Vehicle speed (extended range for racing).", merged."Vehicle.Speed".description);
         # comment should be added
@@ -461,7 +544,7 @@ class VssLoaderTest inherits QUnit::Test {
         assertFalse(exists merged."Vehicle.Cabin.Humidity");
 
         # Speed should still have extended max
-        assertEq(350.0, merged."Vehicle.Speed".max);
+        assertEq(350n, merged."Vehicle.Speed".max);
     }
 
     # Corner cases
@@ -497,8 +580,8 @@ class VssLoaderTest inherits QUnit::Test {
         assertEq("sensor", node.type);
         assertEq("uint8", node.datatype);
         assertEq("km/h", node.unit);
-        assertEq(0.0, node.min);
-        assertEq(255.0, node.max);
+        assertEq(0n, node.min);
+        assertEq(255n, node.max);
         assertTrue(exists node.allowed);
         assertEq(4, node.allowed.size());
         assertEq(50, node.default_value);
@@ -528,6 +611,16 @@ class VssLoaderTest inherits QUnit::Test {
         assertEq(256, nodes."Signal".custom.dbc.message_id);
         assertEq("custom_value", nodes."Signal".custom.vendor_ext);
     }
+%endif
+
+%ifndef NoJson
+    testTreeFromJson() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.json");
+        assertTrue(tree.size() > 0);
+        assertTrue(tree.hasPath("Vehicle"));
+        assertTrue(tree.hasPath("Vehicle.Speed"));
+    }
+%endif
 
     testTreeFromNodeMap() {
         hash<string, hash<VssNode>> nodes = {

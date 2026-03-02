@@ -3,11 +3,14 @@
 %modern
 
 %requires QUnit
-%requires ../qlib/VssLoader
-%try-module DataProvider
-%define NO_DATAPROVIDER
+
+%try-module yaml
+%define NoYaml
 %endtry
-%requires ../qlib/VssDataProcessors
+
+%requires ../qlib/VssLoader
+%requires DataProvider
+%requires ../qlib/VssDataProvider
 
 %exec-class VssDataProcessorsTest
 
@@ -19,37 +22,37 @@ class VssDataProcessorsTest inherits QUnit::Test {
     constructor() : Test("VssDataProcessorsTest", "1.0") {
         test_data_dir = get_script_dir() + "/data";
 
-%ifndef NO_DATAPROVIDER
-        # VssNormalizeProcessor tests
+        # VssNormalizeProcessor tests (no yaml dependency)
         addTestCase("normalize field renaming", \testNormalizeFieldRenaming());
         addTestCase("normalize missing OEM field", \testNormalizeMissingField());
         addTestCase("normalize capabilities", \testNormalizeCapabilities());
 
-        # VssValidateProcessor tests
-        addTestCase("validate valid record passes", \testValidateValidRecord());
-        addTestCase("validate reject invalid", \testValidateRejectInvalid());
-        addTestCase("validate annotate invalid", \testValidateAnnotateInvalid());
-
-        # VssUnitConvertProcessor tests
-        addTestCase("unit convert specified field", \testUnitConvertField());
-        addTestCase("unit convert unmatched field passes through", \testUnitConvertUnmatchedField());
-
-        # VssEnrichProcessor tests
+        # VssEnrichProcessor tests (no yaml dependency)
         addTestCase("enrich static metadata", \testEnrichStaticMetadata());
         addTestCase("enrich timestamp", \testEnrichTimestamp());
         addTestCase("enrich no timestamp", \testEnrichNoTimestamp());
 
-        # Pipeline chain test
-        addTestCase("pipeline chain end-to-end", \testPipelineChain());
-
-        # Corner cases
+        # Corner cases (no yaml dependency)
         addTestCase("empty record", \testEmptyRecord());
         addTestCase("no matching fields", \testNoMatchingFields());
+
+%ifndef NoYaml
+        # VssValidateProcessor tests (require yaml for VssTree)
+        addTestCase("validate valid record passes", \testValidateValidRecord());
+        addTestCase("validate reject invalid", \testValidateRejectInvalid());
+        addTestCase("validate annotate invalid", \testValidateAnnotateInvalid());
+
+        # VssUnitConvertProcessor tests (require yaml for VssTree)
+        addTestCase("unit convert specified field", \testUnitConvertField());
+        addTestCase("unit convert unmatched field passes through", \testUnitConvertUnmatchedField());
+
+        # Pipeline chain test (requires yaml for VssTree)
+        addTestCase("pipeline chain end-to-end", \testPipelineChain());
 %endif
+
         set_return_value(main());
     }
 
-%ifndef NO_DATAPROVIDER
     # Helper: collect processor output
     private list<auto> collectOutput(DataProvider::AbstractDataProcessor proc, auto input) {
         list<auto> results = ();
@@ -114,6 +117,7 @@ class VssDataProcessorsTest inherits QUnit::Test {
         assertEq(DataProvider::DPC_TRANSFORM, proc.getProcessorCapabilities());
     }
 
+%ifndef NoYaml
     # VssValidateProcessor tests
     testValidateValidRecord() {
         VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
@@ -305,6 +309,7 @@ class VssDataProcessorsTest inherits QUnit::Test {
         assertEq("pipeline_test", r4[0]._source);
         assertTrue(exists r4[0]._vss_timestamp);
     }
+%endif
 
     # Corner cases
     testEmptyRecord() {
@@ -334,5 +339,4 @@ class VssDataProcessorsTest inherits QUnit::Test {
         assertEq(1, results.size());
         assertFalse(exists results[0]."Vehicle.Speed");
     }
-%endif
 }

@@ -25,6 +25,19 @@
 public namespace VssLoader {
 
 #! Represents a single VSS signal or branch node
+/** Contains all metadata for a node in the COVESA Vehicle Signal Specification tree.
+    Branch nodes organize the hierarchy; leaf nodes (sensor, actuator, attribute) carry
+    signal metadata such as datatype, unit, min/max range, and allowed values.
+
+    @par Example
+    @code{.py}
+    # Access a speed signal node from the tree
+    *hash<VssNode> speed = tree.getNode("Vehicle.Speed");
+    printf("Path: %s, Type: %s, Datatype: %s, Unit: %s, Range: [%y, %y]\n",
+        speed.path, speed.type, speed.datatype, speed.unit, speed.min, speed.max);
+    # Path: Vehicle.Speed, Type: sensor, Datatype: float, Unit: km/h, Range: [0, 600]
+    @endcode
+*/
 public hashdecl VssNode {
     #! Leaf segment of path (e.g. "Speed" for "Vehicle.Speed")
     string name;
@@ -45,10 +58,10 @@ public hashdecl VssNode {
     *string unit;
 
     #! Minimum allowed value
-    *float min;
+    *number min;
 
     #! Maximum allowed value
-    *float max;
+    *number max;
 
     #! Enumerated list of allowed values
     *list<auto> allowed;
@@ -73,6 +86,18 @@ public hashdecl VssNode {
 }
 
 #! Represents a validation error for a VSS signal value
+/** Returned by @ref VssValidator when a telemetry value fails validation against the
+    VSS catalog definition.
+
+    @par Example
+    @code{.py}
+    list<hash<VssValidationError>> errors = validator.validateValue("Vehicle.Speed", 999);
+    if (errors) {
+        printf("Error: %s — %s\n", errors[0].error_type, errors[0].message);
+        # Error: RANGE_VIOLATION — value 999 above node maximum 600
+    }
+    @endcode
+*/
 public hashdecl VssValidationError {
     #! VSS path that was validated
     string path;
@@ -89,6 +114,11 @@ public hashdecl VssValidationError {
 }
 
 #! Represents a unit conversion specification
+/** Used internally by @ref VssUnitConverter to store the factor/offset conversion
+    parameters between a pair of measurement units.
+
+    Conversion formula: \c target = \c source * \c factor + \c offset
+*/
 public hashdecl VssUnitConversion {
     #! Source unit
     string from_unit;

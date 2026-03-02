@@ -1,0 +1,7 @@
+[
+    {"Vehicle.Speed": 0.0, "Vehicle.IsMoving": false},
+    {"Vehicle.Speed": 45.5, "Vehicle.IsMoving": true, "Vehicle.Powertrain.FuelSystem.Level": 82},
+    {"Vehicle.Speed": 100.0, "Vehicle.IsMoving": true, "Vehicle.Powertrain.FuelSystem.Level": 75},
+    {"Vehicle.Speed": 120.3, "Vehicle.IsMoving": true, "Vehicle.Cabin.SeatCount": 5},
+    {"Vehicle.Speed": 0.0, "Vehicle.IsMoving": false, "Vehicle.VehicleIdentification.VIN": "WDB1234567890ABCD"}
+]

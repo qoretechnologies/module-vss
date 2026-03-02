@@ -1,0 +1,383 @@
+#!/usr/bin/env qore
+
+%modern
+
+%requires QUnit
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../qlib/VssLoader
+%requires DataProvider
+%requires ../qlib/VssDataProvider
+
+%exec-class VssRecordIteratorsTest
+
+class VssRecordIteratorsTest inherits QUnit::Test {
+    constructor() : Test("VssRecordIteratorsTest", "1.0") {
+%ifndef NoJson
+        # JSON iterator - basic parsing
+        addTestCase("json iterator: array of objects", \testJsonArrayOfObjects());
+        addTestCase("json iterator: single top-level object", \testJsonSingleObject());
+        addTestCase("json iterator: empty array", \testJsonEmptyArray());
+
+        # JSON iterator - data types
+        addTestCase("json iterator: null values", \testJsonNullValues());
+        addTestCase("json iterator: numeric precision", \testJsonNumericPrecision());
+        addTestCase("json iterator: boolean values", \testJsonBooleanValues());
+        addTestCase("json iterator: string values", \testJsonStringValues());
+
+        # JSON iterator - nesting
+        addTestCase("json iterator: nested objects", \testJsonNestedObjects());
+        addTestCase("json iterator: nested arrays", \testJsonNestedArrays());
+        addTestCase("json iterator: deeply nested structure", \testJsonDeeplyNested());
+        addTestCase("json iterator: mixed-type arrays", \testJsonMixedTypeArrays());
+        addTestCase("json iterator: empty nested containers", \testJsonEmptyNestedContainers());
+
+        # JSON iterator protocol
+        addTestCase("json iterator: protocol before next", \testJsonProtocolBeforeNext());
+        addTestCase("json iterator: protocol past end", \testJsonProtocolPastEnd());
+        addTestCase("json iterator: multiple iterations", \testJsonMultipleIterations());
+%endif
+
+%ifndef NoYaml
+        # YAML iterator - multi-document format
+        addTestCase("yaml iterator: multi-document", \testYamlMultiDocument());
+        addTestCase("yaml iterator: multi-document single record", \testYamlMultiDocSingle());
+
+        # YAML iterator - sequence-of-mappings format
+        addTestCase("yaml iterator: sequence of mappings", \testYamlSequenceOfMappings());
+
+        # YAML iterator - data types
+        addTestCase("yaml iterator: type resolution", \testYamlTypeResolution());
+        addTestCase("yaml iterator: null values", \testYamlNullValues());
+        addTestCase("yaml iterator: string quoting", \testYamlStringQuoting());
+
+        # YAML iterator - nesting
+        addTestCase("yaml iterator: nested mappings", \testYamlNestedMappings());
+        addTestCase("yaml iterator: nested sequences", \testYamlNestedSequences());
+        addTestCase("yaml iterator: deeply nested structure", \testYamlDeeplyNested());
+
+        # YAML iterator - edge cases
+        addTestCase("yaml iterator: empty input", \testYamlEmptyInput());
+        addTestCase("yaml iterator: empty document", \testYamlEmptyDocument());
+
+        # YAML iterator protocol
+        addTestCase("yaml iterator: protocol before next", \testYamlProtocolBeforeNext());
+        addTestCase("yaml iterator: protocol past end", \testYamlProtocolPastEnd());
+%endif
+
+        set_return_value(main());
+    }
+
+    # Helper: collect all records from an iterator
+    private list<auto> collectAll(AbstractIterator it) {
+        list<auto> result = ();
+        while (it.next()) {
+            push result, it.getValue();
+        }
+        return result;
+    }
+
+%ifndef NoJson
+    # --- JSON iterator: basic parsing ---
+
+    testJsonArrayOfObjects() {
+        string data = '[{"a": 1}, {"b": 2}, {"c": 3}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(3, records.size());
+        assertEq(1, records[0].a);
+        assertEq(2, records[1].b);
+        assertEq(3, records[2].c);
+    }
+
+    testJsonSingleObject() {
+        string data = '{"Vehicle.Speed": 55.0, "Vehicle.IsMoving": true}';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(55.0, records[0]{"Vehicle.Speed"});
+        assertTrue(records[0]{"Vehicle.IsMoving"});
+    }
+
+    testJsonEmptyArray() {
+        VssJsonRecordIterator it(new StringInputStream("[]"));
+        list<auto> records = collectAll(it);
+        assertEq(0, records.size());
+    }
+
+    # --- JSON iterator: data types ---
+
+    testJsonNullValues() {
+        string data = '[{"a": null, "b": 1}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertFalse(exists records[0].a);
+        assertEq(1, records[0].b);
+    }
+
+    testJsonNumericPrecision() {
+        string data = '[{"int": 42, "float": 3.14159, "neg": -273.15, "zero": 0, "large": 999999999}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(42, records[0].int);
+        assertTrue(abs(records[0].float - 3.14159) < 0.00001);
+        assertTrue(abs(records[0].neg - (-273.15)) < 0.01);
+        assertEq(0, records[0].zero);
+        assertEq(999999999, records[0].large);
+    }
+
+    testJsonBooleanValues() {
+        string data = '[{"t": true, "f": false}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertTrue(records[0].t);
+        assertFalse(records[0].f);
+    }
+
+    testJsonStringValues() {
+        string data = '[{"empty": "", "space": " ", "path": "Vehicle.Speed", "special": "km/h"}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq("", records[0].empty);
+        assertEq(" ", records[0].space);
+        assertEq("Vehicle.Speed", records[0].path);
+        assertEq("km/h", records[0].special);
+    }
+
+    # --- JSON iterator: nesting ---
+
+    testJsonNestedObjects() {
+        string data = '[{"meta": {"unit": "km/h", "source": "obd2"}, "value": 100}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq("km/h", records[0].meta.unit);
+        assertEq("obd2", records[0].meta.source);
+        assertEq(100, records[0].value);
+    }
+
+    testJsonNestedArrays() {
+        string data = '[{"tags": ["speed", "vehicle"], "value": 50}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(("speed", "vehicle"), records[0].tags);
+        assertEq(50, records[0].value);
+    }
+
+    testJsonDeeplyNested() {
+        string data = '[{"a": {"b": {"c": {"d": 42}}}}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(42, records[0].a.b.c.d);
+    }
+
+    testJsonMixedTypeArrays() {
+        string data = '[{"values": [1, "two", true, null, 3.14]}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(5, records[0].values.size());
+        assertEq(1, records[0].values[0]);
+        assertEq("two", records[0].values[1]);
+        assertTrue(records[0].values[2]);
+        assertFalse(exists records[0].values[3]);
+        assertTrue(abs(records[0].values[4] - 3.14) < 0.01);
+    }
+
+    testJsonEmptyNestedContainers() {
+        string data = '[{"empty_obj": {}, "empty_arr": [], "value": 1}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(0, records[0].empty_obj.size());
+        assertEq(0, records[0].empty_arr.size());
+        assertEq(1, records[0].value);
+    }
+
+    # --- JSON iterator protocol ---
+
+    testJsonProtocolBeforeNext() {
+        VssJsonRecordIterator it(new StringInputStream('[{"a": 1}]'));
+        # valid() should be False before first next()
+        assertFalse(it.valid());
+    }
+
+    testJsonProtocolPastEnd() {
+        VssJsonRecordIterator it(new StringInputStream('[{"a": 1}]'));
+        assertTrue(it.next());
+        assertEq(1, it.getValue().a);
+        assertTrue(it.valid());
+        # Advance past end
+        assertFalse(it.next());
+        assertFalse(it.valid());
+        # Repeated next() past end stays False
+        assertFalse(it.next());
+        assertFalse(it.valid());
+    }
+
+    testJsonMultipleIterations() {
+        string data = '[{"n": 1}, {"n": 2}, {"n": 3}]';
+        VssJsonRecordIterator it(new StringInputStream(data));
+        int count = 0;
+        while (it.next()) {
+            ++count;
+            assertEq(count, it.getValue().n);
+            assertTrue(it.valid());
+        }
+        assertEq(3, count);
+        assertFalse(it.valid());
+    }
+%endif
+
+%ifndef NoYaml
+    # --- YAML iterator: multi-document format ---
+
+    testYamlMultiDocument() {
+        string data = "---\na: 1\nb: 2\n---\nc: 3\nd: 4\n---\ne: 5\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(3, records.size());
+        assertEq(1, records[0].a);
+        assertEq(2, records[0].b);
+        assertEq(3, records[1].c);
+        assertEq(4, records[1].d);
+        assertEq(5, records[2].e);
+    }
+
+    testYamlMultiDocSingle() {
+        string data = "---\nVehicle.Speed: 100.0\nVehicle.IsMoving: true\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(100.0, records[0]{"Vehicle.Speed"});
+        assertTrue(records[0]{"Vehicle.IsMoving"});
+    }
+
+    # --- YAML iterator: sequence-of-mappings format ---
+
+    testYamlSequenceOfMappings() {
+        string data = "- a: 1\n  b: 2\n- c: 3\n  d: 4\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(2, records.size());
+        assertEq(1, records[0].a);
+        assertEq(2, records[0].b);
+        assertEq(3, records[1].c);
+        assertEq(4, records[1].d);
+    }
+
+    # --- YAML iterator: data types ---
+
+    testYamlTypeResolution() {
+        string data = "---\nint_val: 42\nfloat_val: 3.14\nbool_true: true\nbool_false: false\nstr_val: hello\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(42, records[0].int_val);
+        assertTrue(abs(records[0].float_val - 3.14) < 0.01);
+        assertTrue(records[0].bool_true);
+        assertFalse(records[0].bool_false);
+        assertEq("hello", records[0].str_val);
+    }
+
+    testYamlNullValues() {
+        string data = "---\na: ~\nb: null\nc: 1\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertFalse(exists records[0].a);
+        assertFalse(exists records[0].b);
+        assertEq(1, records[0].c);
+    }
+
+    testYamlStringQuoting() {
+        string data = "---\nquoted: \"true\"\nsingle: '42'\nplain: hello world\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        # quoted "true" should be resolved as boolean by parse_yaml
+        # but single-quoted '42' should also go through parse_yaml
+        # plain string stays a string
+        assertEq("hello world", records[0].plain);
+    }
+
+    # --- YAML iterator: nesting ---
+
+    testYamlNestedMappings() {
+        string data = "---\nmeta:\n  unit: km/h\n  source: obd2\nvalue: 100\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq("km/h", records[0].meta.unit);
+        assertEq("obd2", records[0].meta.source);
+        assertEq(100, records[0].value);
+    }
+
+    testYamlNestedSequences() {
+        string data = "---\ntags:\n  - speed\n  - vehicle\nvalue: 50\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(("speed", "vehicle"), records[0].tags);
+        assertEq(50, records[0].value);
+    }
+
+    testYamlDeeplyNested() {
+        string data = "---\na:\n  b:\n    c:\n      d: 42\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(1, records.size());
+        assertEq(42, records[0].a.b.c.d);
+    }
+
+    # --- YAML iterator: edge cases ---
+
+    testYamlEmptyInput() {
+        VssYamlRecordIterator it(new StringInputStream(""));
+        list<auto> records = collectAll(it);
+        assertEq(0, records.size());
+    }
+
+    testYamlEmptyDocument() {
+        # A document with just --- and no content should not produce a record
+        string data = "---\n...\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        list<auto> records = collectAll(it);
+        assertEq(0, records.size());
+    }
+
+    # --- YAML iterator protocol ---
+
+    testYamlProtocolBeforeNext() {
+        string data = "---\na: 1\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        assertFalse(it.valid());
+    }
+
+    testYamlProtocolPastEnd() {
+        string data = "---\na: 1\n";
+        VssYamlRecordIterator it(new StringInputStream(data));
+        assertTrue(it.next());
+        assertEq(1, it.getValue().a);
+        assertTrue(it.valid());
+        assertFalse(it.next());
+        assertFalse(it.valid());
+        # Repeated next() past end stays False
+        assertFalse(it.next());
+        assertFalse(it.valid());
+    }
+%endif
+}

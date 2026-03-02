@@ -12,7 +12,6 @@ find_package(Qore 2.0 REQUIRED)
 set(QMOD
     qlib/VssLoader
     qlib/VssDataProvider
-    qlib/VssDataProcessors
 )
 
 # create docs targets needed by qore_external_user_module
@@ -23,7 +22,6 @@ qore_user_modules("${QMOD}")
 
 qore_external_user_module("qlib/VssLoader" "")
 qore_external_user_module("qlib/VssDataProvider" "VssLoader")
-qore_external_user_module("qlib/VssDataProcessors" "VssLoader")
 
 qore_dist("${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 

@@ -11,15 +11,14 @@ This module includes:
     instance expansion, overlay merging), pre-exported VSS JSON/YAML loading,
     data validation against VSS catalogs, and extensible unit conversion
   - VssDataProvider: Qorus DataProvider integration for browsable VSS catalog
-    navigation, signal metadata retrieval, and data validation
-  - VssDataProcessors: Pipeline data processors for telemetry normalization,
-    validation, unit conversion, and enrichment
+    navigation, signal metadata retrieval, data validation, and pipeline data
+    processors for telemetry normalization, unit conversion, and enrichment
 
 Requirements
 ------------
   - Qore 2.0+
   - yaml module (for YAML/vspec parsing)
-  - DataProvider module (for VssDataProvider and VssDataProcessors)
+  - DataProvider module (for VssDataProvider)
 
 License
 -------

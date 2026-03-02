@@ -25,8 +25,37 @@
 public namespace VssLoader {
 
 #! Validates signal data against a VSS catalog
-/** Performs type checking, range checking, and enum validation against
-    the VSS signal definitions in a VssTree.
+/** Performs type checking, range checking, array element validation, and enum validation
+    against the VSS signal definitions in a @ref VssTree.
+
+    Validation checks:
+    - **Type**: Qore type matches the expected VSS datatype mapping
+    - **Range**: Numeric value within intrinsic type range and node-specific min/max
+    - **Array elements**: Individual elements in array-typed values match expected type
+    - **Enum**: Value is in the allowed values list (if defined)
+
+    @par Fleet Telemetry Validation Example
+    @code{.py}
+    VssTree tree("/opt/fleet/vss_rel_4.0.yaml");
+    VssValidator validator(tree);
+
+    # Validate a single signal value
+    list<hash<VssValidationError>> errors = validator.validateValue("Vehicle.Speed", 85);
+    printf("Valid: %y\n", errors.empty()); # Valid: True
+
+    # Validate an entire telemetry record from an OBD-II adapter
+    hash<auto> record = {
+        "Vehicle.Speed": 85,
+        "Vehicle.Powertrain.CombustionEngine.ECT": 90,
+        "Vehicle.Powertrain.FuelSystem.Level": 65,
+    };
+    errors = validator.validateRecord(record);
+    if (errors) {
+        foreach hash<VssValidationError> err in (errors) {
+            printf("INVALID: %s — %s\n", err.path, err.message);
+        }
+    }
+    @endcode
 */
 public class VssValidator {
     private {
@@ -77,6 +106,11 @@ public class VssValidator {
             push errors, type_err;
             # if type is wrong, skip further validation
             return errors;
+        }
+
+        # array element type validation
+        if (value.typeCode() == NT_LIST && exists node.datatype) {
+            errors += validateArrayElements(node, value);
         }
 
         # range validation
@@ -179,13 +213,14 @@ public class VssValidator {
             return NOTHING;
         }
 
-        float fval = float(value);
+        # use arbitrary-precision number to avoid float64 precision loss for int64/uint64 boundaries
+        number nval = number(value);
 
         # check VSS type intrinsic range
         if (exists node.datatype) {
             *hash<auto> type_range = VssTypeRanges{node.datatype};
             if (exists type_range) {
-                if (fval < type_range.min || fval > type_range.max) {
+                if (nval < number(type_range.min) || nval > number(type_range.max)) {
                     return <VssValidationError>{
                         "path": node.path,
                         "error_type": "RANGE_VIOLATION",
@@ -198,7 +233,7 @@ public class VssValidator {
         }
 
         # check node-specific min/max
-        if (exists node.min && fval < node.min) {
+        if (exists node.min && nval < node.min) {
             return <VssValidationError>{
                 "path": node.path,
                 "error_type": "RANGE_VIOLATION",
@@ -206,7 +241,7 @@ public class VssValidator {
                 "actual_value": value,
             };
         }
-        if (exists node.max && fval > node.max) {
+        if (exists node.max && nval > node.max) {
             return <VssValidationError>{
                 "path": node.path,
                 "error_type": "RANGE_VIOLATION",
@@ -218,21 +253,77 @@ public class VssValidator {
         return NOTHING;
     }
 
+    #! Maps array VSS datatypes to the expected Qore element type
+    const ArrayElementTypeMap = {
+        "uint8[]": "int",
+        "int32[]": "int",
+        "float[]": "float",
+        "double[]": "float",
+        "boolean[]": "bool",
+        "string[]": "string",
+    };
+
+    #! Validates individual elements in an array-typed value
+    private list<hash<VssValidationError>> validateArrayElements(hash<VssNode> node, list<auto> value) {
+        list<hash<VssValidationError>> errors = ();
+
+        *string expected_elem_type = ArrayElementTypeMap{node.datatype};
+        if (!exists expected_elem_type) {
+            return errors;
+        }
+
+        for (int i = 0; i < value.size(); i++) {
+            auto elem = value[i];
+            if (!exists elem) {
+                continue;
+            }
+            bool valid;
+            switch (expected_elem_type) {
+                case "int": {
+                    valid = elem.typeCode() == NT_INT;
+                    if (!valid && elem.typeCode() == NT_FLOAT) {
+                        valid = elem == int(elem);
+                    }
+                    break;
+                }
+                case "float": {
+                    valid = elem.typeCode() == NT_FLOAT || elem.typeCode() == NT_INT
+                        || elem.typeCode() == NT_NUMBER;
+                    break;
+                }
+                case "bool": {
+                    valid = elem.typeCode() == NT_BOOLEAN;
+                    break;
+                }
+                case "string": {
+                    valid = elem.typeCode() == NT_STRING;
+                    break;
+                }
+                default:
+                    valid = True;
+            }
+
+            if (!valid) {
+                push errors, <VssValidationError>{
+                    "path": node.path,
+                    "error_type": "TYPE_MISMATCH",
+                    "message": sprintf("array element [%d]: expected %y but got %y (%y)",
+                        i, expected_elem_type, elem.type(), elem),
+                    "actual_value": value,
+                };
+            }
+        }
+
+        return errors;
+    }
+
     #! Validates a value against the allowed values list
     private *hash<VssValidationError> validateAllowed(hash<VssNode> node, auto value) {
         if (!exists node.allowed) {
             return NOTHING;
         }
 
-        bool found = False;
-        foreach auto allowed_val in (node.allowed) {
-            if (value == allowed_val) {
-                found = True;
-                break;
-            }
-        }
-
-        if (!found) {
+        if (!inlist_hard(value, node.allowed)) {
             return <VssValidationError>{
                 "path": node.path,
                 "error_type": "ENUM_VIOLATION",

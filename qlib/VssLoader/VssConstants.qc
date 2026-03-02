@@ -30,7 +30,7 @@ public const VssNodeType_SENSOR = "sensor";
 public const VssNodeType_ACTUATOR = "actuator";
 public const VssNodeType_ATTRIBUTE = "attribute";
 
-#! Valid VSS node types
+#! Valid VSS node type set (for O(1) membership testing during parsing)
 public const VssValidNodeTypes = {
     "branch": True,
     "sensor": True,
@@ -71,10 +71,18 @@ public const VssTypeRanges = {
     "uint32": {"min": 0, "max": 4294967295},
     "int32": {"min": -2147483648, "max": 2147483647},
     "uint64": {"min": 0, "max": 18446744073709551615n},
-    "int64": {"min": -9223372036854775807, "max": 9223372036854775807},
+    "int64": {"min": -9223372036854775808n, "max": 9223372036854775807n},
 };
 
-#! Regex for #include directive: #include <path> [<mount-point>]
+#! Standard VSS node property keys; any other keys are treated as custom/OEM metadata
+public const VssStandardNodeKeys = {
+    "type": True, "datatype": True, "description": True, "unit": True,
+    "min": True, "max": True, "allowed": True, "default": True,
+    "comment": True, "deprecation": True, "instances": True, "delete": True,
+    "children": True,
+};
+
+#! Regex for \c "#include" directive: \c "#include <path> [<mount-point>]"
 public const VSS_INCLUDE_REGEX = "^#include\\s+(\\S+)(?:\\s+(\\S+))?\\s*$";
 
 } # namespace VssLoader

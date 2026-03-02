@@ -26,10 +26,30 @@ public namespace VssLoader {
 
 #! Represents a resolved VSS signal tree
 /** Provides navigation and query operations over a flat map of VSS paths to nodes.
+    This is the core data structure for working with VSS catalogs, used by both the
+    DataProvider layer and the validation/processing pipeline.
 
     Can be constructed from:
     - A pre-exported JSON or YAML file
     - A pre-parsed node map (from VssVspecParser)
+
+    @par Fleet Catalog Loading Example
+    @code{.py}
+    # Load the COVESA VSS v4.0 catalog for a fleet management platform
+    VssTree tree("/opt/fleet/catalogs/vss_rel_4.0.yaml");
+    printf("Loaded %d signals\n", tree.size());  # Loaded 1247 signals
+
+    # Look up a specific signal
+    *hash<VssNode> speed = tree.getNode("Vehicle.Speed");
+    printf("Unit: %s, Range: [%y, %y]\n", speed.unit, speed.min, speed.max);
+
+    # Discover children under a branch
+    list<string> powertrain_children = tree.getChildNames("Vehicle.Powertrain");
+    # ("CombustionEngine", "ElectricMotor", "FuelSystem", "Transmission", ...)
+
+    # Find all tire-related signals using glob matching
+    list<string> tire_signals = tree.findPaths("Vehicle.Chassis.Axle.**.Tire.*");
+    @endcode
 */
 public class VssTree {
     private {
@@ -38,6 +58,10 @@ public class VssTree {
 
         #! VSS specification version
         string vss_version;
+
+        #! Children index: parent path -> list of direct child names
+        #! Empty string key "" holds top-level node names
+        hash<string, list<string>> children_index;
     }
 
     #! Creates a VssTree from a pre-exported JSON or YAML file
@@ -48,23 +72,32 @@ public class VssTree {
     constructor(string filepath) {
         auto parsed;
         if (filepath =~ /\.json$/i) {
+%ifdef NoJson
+            throw "JSON-MODULE-MISSING", "cannot parse JSON file; the json module is not available";
+%else
             string content = ReadOnlyFile::readTextFile(filepath);
             try {
                 parsed = parse_json(content);
             } catch (hash<ExceptionInfo> ex) {
                 throw "VSS-LOAD-ERROR", sprintf("failed to parse JSON file %y: %s", filepath, ex.desc), ex;
             }
+%endif
         } else if (filepath =~ /\.(yaml|yml)$/i) {
+%ifdef NoYaml
+            throw "YAML-MODULE-MISSING", "cannot parse YAML file; the yaml module is not available";
+%else
             string content = ReadOnlyFile::readTextFile(filepath);
             try {
                 parsed = parse_yaml(content);
             } catch (hash<ExceptionInfo> ex) {
                 throw "VSS-LOAD-ERROR", sprintf("failed to parse YAML file %y: %s", filepath, ex.desc), ex;
             }
+%endif
         } else if (filepath =~ /\.vspec$/i) {
             VssVspecParser parser(dirname(filepath));
             nodes = parser.parseFile(basename(filepath));
             vss_version = "unknown";
+            buildChildrenIndex();
             return;
         } else {
             throw "VSS-LOAD-ERROR",
@@ -79,6 +112,7 @@ public class VssTree {
         nodes = {};
         loadFromHash(parsed);
         vss_version = "unknown";
+        buildChildrenIndex();
     }
 
     #! Creates a VssTree from a pre-parsed node map
@@ -88,6 +122,7 @@ public class VssTree {
     constructor(hash<string, hash<VssNode>> nodes, *string version) {
         self.nodes = nodes;
         vss_version = version ?? "unknown";
+        buildChildrenIndex();
     }
 
     #! Returns the node at the given path, or NOTHING if not found
@@ -106,31 +141,8 @@ public class VssTree {
         @return list of child node names (leaf segments)
     */
     list<string> getChildNames(*string parent_path) {
-        hash<string, bool> children;
-        string prefix = exists parent_path ? parent_path + "." : "";
-        int prefix_len = prefix.length();
-
-        HashIterator it(nodes);
-        while (it.next()) {
-            string path = it.getKey();
-            if (prefix_len > 0) {
-                if (path.length() <= prefix_len || path.substr(0, prefix_len) != prefix) {
-                    continue;
-                }
-                string remainder = path.substr(prefix_len);
-                # only direct children: no dots in remainder
-                if (remainder.find(".") < 0) {
-                    children{remainder} = True;
-                }
-            } else {
-                # top-level: paths with no dots
-                if (path.find(".") < 0) {
-                    children{path} = True;
-                }
-            }
-        }
-
-        return keys children;
+        string key = parent_path ?? "";
+        return children_index{key} ?? ();
     }
 
     #! Returns the child nodes of the given branch
@@ -139,20 +151,14 @@ public class VssTree {
         @return list of direct child VssNode hashes
     */
     list<hash<VssNode>> getChildren(string branch_path) {
+        list<string> child_names = children_index{branch_path} ?? ();
         list<hash<VssNode>> result = ();
-        string prefix = branch_path + ".";
-        int prefix_len = prefix.length();
-
-        HashIterator it(nodes);
-        while (it.next()) {
-            string path = it.getKey();
-            if (path.length() > prefix_len
-                && path.substr(0, prefix_len) == prefix
-                && path.substr(prefix_len).find(".") < 0) {
-                push result, it.getValue();
+        foreach string name in (child_names) {
+            string child_path = branch_path + "." + name;
+            if (exists nodes{child_path}) {
+                push result, nodes{child_path};
             }
         }
-
         return result;
     }
 
@@ -206,19 +212,48 @@ public class VssTree {
         return result;
     }
 
-    #! Returns the complete flat node map
+    #! Returns the complete flat node map (path to VssNode)
+    /** @return a hash mapping every VSS path to its @ref VssNode definition
+    */
     hash<string, hash<VssNode>> getAllNodes() {
         return nodes;
     }
 
     #! Returns the VSS specification version
+    /** @return the version string (e.g. \c "4.0"), or \c "unknown" if not specified
+    */
     string getVersion() {
         return vss_version;
     }
 
-    #! Returns the total number of nodes in the tree
+    #! Returns the total number of nodes in the tree (branches + leaves)
+    /** @return the node count
+    */
     int size() {
         return nodes.size();
+    }
+
+    #! Builds the children index for O(1) child lookups
+    private buildChildrenIndex() {
+        children_index = {};
+        HashIterator it(nodes);
+        while (it.next()) {
+            string path = it.getKey();
+            int last_dot = path.rfind(".");
+            string parent;
+            string name;
+            if (last_dot >= 0) {
+                parent = path.substr(0, last_dot);
+                name = path.substr(last_dot + 1);
+            } else {
+                parent = "";
+                name = path;
+            }
+            if (!exists children_index{parent}) {
+                children_index{parent} = ();
+            }
+            push children_index{parent}, name;
+        }
     }
 
     #! Loads nodes from a raw hash (from JSON/YAML parsing)
@@ -248,21 +283,17 @@ public class VssTree {
                 }
 
                 # separate children from node properties
-                hash<string, bool> node_keys = {
-                    "type": True, "datatype": True, "description": True, "unit": True,
-                    "min": True, "max": True, "allowed": True, "default": True,
-                    "comment": True, "deprecation": True, "instances": True, "delete": True,
-                    "children": True,
-                };
-
                 *hash<string, auto> custom;
                 HashIterator vit(val);
                 while (vit.next()) {
-                    if (!node_keys{vit.getKey()} && vit.getValue().typeCode() != NT_HASH) {
-                        if (!exists custom) {
-                            custom = {};
+                    if (!VssStandardNodeKeys{vit.getKey()}) {
+                        # include non-hash values and hash values that aren't child VSS nodes
+                        if (vit.getValue().typeCode() != NT_HASH || !exists vit.getValue().type) {
+                            if (!exists custom) {
+                                custom = {};
+                            }
+                            custom{vit.getKey()} = vit.getValue();
                         }
-                        custom{vit.getKey()} = vit.getValue();
                     }
                 }
 
@@ -273,8 +304,8 @@ public class VssTree {
                     "datatype": val.datatype,
                     "description": val.description ?? "",
                     "unit": val.unit,
-                    "min": exists val.min ? float(val.min) : NOTHING,
-                    "max": exists val.max ? float(val.max) : NOTHING,
+                    "min": exists val.min ? number(val.min) : NOTHING,
+                    "max": exists val.max ? number(val.max) : NOTHING,
                     "allowed": val.allowed,
                     "default_value": val."default",
                     "comment": val.comment,
@@ -289,12 +320,13 @@ public class VssTree {
                     loadFromHash(val.children, path);
                 }
 
-                # also recurse into any sub-hashes that look like child nodes
+                # also recurse into any sub-hashes that look like child VSS nodes
                 HashIterator cit(val);
                 while (cit.next()) {
                     if (cit.getValue().typeCode() == NT_HASH
-                        && !node_keys{cit.getKey()}
-                        && exists cit.getValue().type) {
+                        && !VssStandardNodeKeys{cit.getKey()}
+                        && exists cit.getValue().type
+                        && VssValidNodeTypes{string(cit.getValue().type).lwr()}) {
                         loadFromHash({cit.getKey(): cit.getValue()}, path);
                     }
                 }

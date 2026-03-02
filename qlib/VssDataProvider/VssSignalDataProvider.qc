@@ -25,10 +25,34 @@
 public namespace VssDataProvider {
 
 #! Provider for VSS leaf signal metadata
-/** Supports request API: returns signal metadata (type, datatype, unit,
-    min, max, allowed, description).
+/** Represents a single VSS signal node (sensor, actuator, or attribute). Supports the
+    request API to return signal metadata including type, datatype, unit, min/max range,
+    allowed values, and description.
+
+    These providers are created automatically when navigating to a leaf node via
+    @ref VssCatalogDataProvider.
+
+    @par IoT Telemetry Configuration Example
+    @code{.py}
+    # Look up tire pressure signal metadata for IoT sensor configuration
+    AbstractDataProvider tire = root.getChildProvider("catalog")
+        .getChildProvider("Vehicle").getChildProvider("Chassis")
+        .getChildProvider("Axle").getChildProvider("Row1")
+        .getChildProvider("Wheel").getChildProvider("Left")
+        .getChildProvider("Tire").getChildProvider("Pressure");
+    hash<auto> meta = tire.doRequest({});
+    printf("Signal: %s\n", meta.path);     # Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.Pressure
+    printf("Type: %s\n", meta.datatype);   # uint16
+    printf("Unit: %s\n", meta.unit);       # kPa
+    printf("Range: [%y, %y]\n", meta.min, meta.max); # [0, 1000]
+    @endcode
 */
 public class VssSignalDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        #! Response type
+        static VssSignalResponseDataType ResponseType();
+    }
+
     private {
         #! The VSS tree
         VssLoader::VssTree tree;
@@ -37,13 +61,18 @@ public class VssSignalDataProvider inherits DataProvider::AbstractDataProvider {
         string signal_path;
     }
 
-    #! Creates a signal provider for a specific path
+    #! Creates a signal provider for a specific VSS leaf path
+    /** @param tree the loaded VSS tree
+        @param path the full dot-separated VSS path (e.g. \c "Vehicle.Speed")
+    */
     constructor(VssLoader::VssTree tree, string path) {
         self.tree = tree;
         self.signal_path = path;
     }
 
-    #! Returns the provider name
+    #! Returns the leaf segment of the signal path as the provider name
+    /** @return the leaf name (e.g. \c "Speed" for path \c "Vehicle.Speed")
+    */
     string getName() {
         int dot = signal_path.rfind(".");
         if (dot >= 0) {
@@ -52,7 +81,9 @@ public class VssSignalDataProvider inherits DataProvider::AbstractDataProvider {
         return signal_path;
     }
 
-    #! Returns provider description
+    #! Returns the signal's human-readable description from the VSS catalog
+    /** @return the signal description, or @ref nothing if the node is not found
+    */
     *string getDesc() {
         *hash<VssLoader::VssNode> node = tree.getNode(signal_path);
         if (exists node) {
@@ -86,6 +117,11 @@ public class VssSignalDataProvider inherits DataProvider::AbstractDataProvider {
     #! Returns the request type (NOTHING = any request accepted)
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
         return NOTHING;
+    }
+
+    #! Returns the response type
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return ResponseType;
     }
 
     #! Returns provider static info

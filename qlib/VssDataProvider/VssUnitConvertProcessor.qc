@@ -22,9 +22,29 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-public namespace VssDataProcessors {
+public namespace VssDataProvider {
 
 #! Applies unit conversions to specified fields in a record
+/** Converts numeric signal values between measurement units using a
+    @ref VssUnitConverter instance. Non-numeric values are silently skipped.
+
+    Common fleet use cases include converting between metric and imperial units
+    for multi-region fleet dashboards, or normalizing OBD-II readings to VSS
+    standard units.
+
+    @par Multi-Region Fleet Dashboard Example
+    @code{.py}
+    VssUnitConverter converter();
+    # Convert European km/h and Celsius to US mph and Fahrenheit
+    VssUnitConvertProcessor unit_proc(converter, {
+        "Vehicle.Speed": {"from_unit": "km/h", "to_unit": "mph"},
+        "Vehicle.Powertrain.CombustionEngine.ECT": {"from_unit": "celsius", "to_unit": "fahrenheit"},
+        "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.Pressure": {"from_unit": "kPa", "to_unit": "psi"},
+    });
+    # Input:  {"Vehicle.Speed": 100}
+    # Output: {"Vehicle.Speed": 62.1371}
+    @endcode
+*/
 public class VssUnitConvertProcessor inherits DataProvider::AbstractDataProcessor {
     private {
         #! Unit converter
@@ -44,7 +64,10 @@ public class VssUnitConvertProcessor inherits DataProvider::AbstractDataProcesso
         self.conversion_map = conversion_map;
     }
 
-    #! Applies unit conversions to matching fields
+    #! Applies unit conversions to matching numeric fields in the record
+    /** @param enqueue the callback to enqueue the converted record
+        @param _data the input data; non-hash data is passed through unchanged
+    */
     private auto submitImpl(code enqueue, auto _data) {
         if (_data.typeCode() != NT_HASH) {
             enqueue(_data);
@@ -57,22 +80,29 @@ public class VssUnitConvertProcessor inherits DataProvider::AbstractDataProcesso
         while (it.next()) {
             string path = it.getKey();
             if (exists record{path}) {
-                hash<string, string> spec = it.getValue();
-                record{path} = converter.convert(
-                    float(record{path}),
-                    spec.from_unit,
-                    spec.to_unit,
-                );
+                auto val = record{path};
+                # only convert numeric values; skip non-numeric fields silently
+                if (val.typeCode() == NT_INT || val.typeCode() == NT_FLOAT
+                    || val.typeCode() == NT_NUMBER) {
+                    hash<string, string> spec = it.getValue();
+                    record{path} = converter.convert(
+                        float(val),
+                        spec.from_unit,
+                        spec.to_unit,
+                    );
+                }
             }
         }
 
         enqueue(record);
     }
 
-    #! Returns the processor capabilities
+    #! Returns the processor capabilities (transform only — all records pass through)
+    /** @return @ref DataProvider::DPC_TRANSFORM
+    */
     private int getProcessorCapabilitiesImpl() {
         return DataProvider::DPC_TRANSFORM;
     }
 }
 
-} # namespace VssDataProcessors
+} # namespace VssDataProvider

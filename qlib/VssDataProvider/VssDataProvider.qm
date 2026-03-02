@@ -24,37 +24,152 @@
 
 %requires qore >= 2.0
 %requires(reexport) DataProvider
+%requires FileLocationHandler
 %requires VssLoader
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
 
 %modern
 
 module VssDataProvider {
     version = "1.0";
-    desc = "COVESA VSS catalog data provider";
+    desc = "COVESA VSS catalog data provider and pipeline processors";
     author = "Qore Technologies, s.r.o.";
     url = "https://github.com/qoretechnologies/module-vss";
     license = "MIT";
     init = sub () {
         DataProvider::registerFactory(new VssDataProviderFactory());
+
+        # Register VSS app
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": VssDataProvider::AppName,
+            "display_name": "VSS Data",
+            "short_desc": "Ingest and process vehicle signal telemetry data",
+            "desc": "Ingest, validate, and transform vehicle telemetry data using the COVESA Vehicle "
+                "Signal Specification (VSS) standard for fleet analytics and IoT applications",
+            "logo": VssDataProvider::VssLogo,
+            "logo_file_name": "vss-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Iot, DataProvider::AppGroup::DataTransformation),
+        });
+
+        # Register DPAT_FIND action for reading VSS data
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VssDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "subtype": "vssread",
+            "display_name": "Read VSS Data",
+            "short_desc": "Read vehicle telemetry records from a data file",
+            "desc": "Reads vehicle signal telemetry records from a JSON or YAML data file for "
+                "processing in data pipelines",
+            "action_code": DPAT_FIND,
+            "cls": "VssDataProvider::VssReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VssReadDataProvider::ConstructorOptions{"path", "format"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
 /** @mainpage VssDataProvider Module
 
-    @section vssdpintro Introduction
+    @section vssdataproviderintro Introduction
 
     The %VssDataProvider module provides DataProvider integration for COVESA VSS
-    catalogs, enabling browsable tree navigation and data validation through
-    Qore's data provider framework.
+    catalogs, enabling browsable tree navigation, data validation, telemetry
+    ingestion, and pipeline processing through Qore's data provider framework.
 
-    @section vssdpclasses Classes
+    @section vssdataproviderquickstart Quick Start
 
-    - @ref VssDataProvider::VssDataProviderFactory "VssDataProviderFactory"
-    - @ref VssDataProvider::VssRootDataProvider "VssRootDataProvider"
-    - @ref VssDataProvider::VssCatalogDataProvider "VssCatalogDataProvider"
-    - @ref VssDataProvider::VssSignalDataProvider "VssSignalDataProvider"
-    - @ref VssDataProvider::VssValidationDataProvider "VssValidationDataProvider"
+    @par Catalog Browsing and Signal Validation
+    @code{.py}
+    %requires VssDataProvider
+
+    # Create provider via the factory
+    AbstractDataProviderFactory factory = DataProvider::getFactory("vss");
+    AbstractDataProvider root = factory.create({
+        "catalog_path": "/opt/fleet/vss_rel_4.0.yaml",
+    });
+
+    # Browse the VSS catalog tree
+    AbstractDataProvider speed = root.getChildProvider("catalog")
+        .getChildProvider("Vehicle").getChildProvider("Speed");
+    hash<auto> meta = speed.doRequest({});
+    printf("Speed: %s %s\n", meta.datatype, meta.unit); # float km/h
+
+    # Validate telemetry values
+    hash<auto> result = root.getChildProvider("validate").doRequest({
+        "path": "Vehicle.Speed",
+        "value": 85,
+    });
+    @endcode
+
+    @par Fleet Telemetry Data Pipeline
+    @code{.py}
+    # Read telemetry → normalize → validate → convert units → enrich
+    VssReadDataProvider reader({"path": "file:///data/fleet/truck-42.json"});
+    VssTree tree("/opt/fleet/vss_rel_4.0.yaml");
+    VssUnitConverter converter();
+
+    list<AbstractDataProcessor> pipeline = (
+        new VssNormalizeProcessor({"veh_spd": "Vehicle.Speed", "ect": "Vehicle.Powertrain.CombustionEngine.ECT"}),
+        new VssValidateProcessor(tree, True),
+        new VssUnitConvertProcessor(converter, {"Vehicle.Speed": {"from_unit": "km/h", "to_unit": "mph"}}),
+        new VssEnrichProcessor({"fleet_id": "EU-WEST-42", "vin": "WBA3A5C55CF256789"}),
+    );
+    @endcode
+
+    @section vssdataproviderclasses Data Provider Classes
+
+    - @ref VssDataProvider::VssDataProviderFactory "VssDataProviderFactory" - Factory
+      for creating VSS catalog data providers
+    - @ref VssDataProvider::VssRootDataProvider "VssRootDataProvider" - Root provider
+      with \c "catalog" and \c "validate" children
+    - @ref VssDataProvider::VssCatalogDataProvider "VssCatalogDataProvider" - Browsable
+      VSS signal tree
+    - @ref VssDataProvider::VssSignalDataProvider "VssSignalDataProvider" - Leaf signal
+      metadata provider
+    - @ref VssDataProvider::VssValidationDataProvider "VssValidationDataProvider" -
+      Request-response validation provider
+    - @ref VssDataProvider::VssReadDataProvider "VssReadDataProvider" - Streaming
+      read provider for JSON/YAML telemetry files (DPAT_FIND)
+
+    @section vssdataproviderprocessors Pipeline Processors
+
+    - @ref VssDataProvider::VssNormalizeProcessor "VssNormalizeProcessor" - Renames
+      OEM fields to standardized VSS paths
+    - @ref VssDataProvider::VssValidateProcessor "VssValidateProcessor" - Validates
+      records against VSS catalog (filter or annotate mode)
+    - @ref VssDataProvider::VssUnitConvertProcessor "VssUnitConvertProcessor" - Converts
+      signal values between measurement units
+    - @ref VssDataProvider::VssEnrichProcessor "VssEnrichProcessor" - Adds fleet
+      metadata and timestamps to records
+
+    @section vssdataprovidertypes Types
+
+    - @ref VssDataProvider::VssSignalResponseDataType "VssSignalResponseDataType" -
+      Signal metadata response fields
+    - @ref VssDataProvider::VssValidationRequestDataType "VssValidationRequestDataType" -
+      Validation request fields (path + value)
+    - @ref VssDataProvider::VssValidationResponseDataType "VssValidationResponseDataType" -
+      Validation response fields (valid + errors)
 */
 
 public namespace VssDataProvider {
+    #! Application name for the DataProvider action catalog
+    public const AppName = "VSS";
+
+    #! VSS app logo (SVG)
+    public const VssLogo = File::readTextFile(get_script_dir() + "/vss-logo.svg");
 }

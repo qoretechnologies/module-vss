@@ -25,9 +25,42 @@
 public namespace VssDataProvider {
 
 #! Request-response data provider for VSS validation
-/** Accepts {path: string, value: auto}, returns {valid: bool, errors: list}.
+/** Accepts a hash with \c "path" (VSS signal path) and \c "value" (value to validate),
+    returns a hash with \c "valid" (bool) and \c "errors" (list of validation errors).
+
+    Performs type checking, range validation, and allowed-value enumeration checking
+    against the VSS catalog definitions.
+
+    @par Fleet Data Quality Gate Example
+    @code{.py}
+    # Validate incoming telemetry before persisting to fleet database
+    AbstractDataProvider validator = root.getChildProvider("validate");
+
+    # Valid reading — coolant temperature within uint8 range
+    hash<auto> ok = validator.doRequest({
+        "path": "Vehicle.Powertrain.CombustionEngine.ECT",
+        "value": 95,
+    });
+    printf("Valid: %y\n", ok.valid); # True
+
+    # Invalid reading — fuel level exceeds 100 percent
+    hash<auto> bad = validator.doRequest({
+        "path": "Vehicle.Powertrain.FuelSystem.Level",
+        "value": 150,
+    });
+    printf("Valid: %y, Error: %s\n", bad.valid, bad.errors[0].message);
+    # Valid: False, Error: value 150 above node maximum 100
+    @endcode
 */
 public class VssValidationDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        #! Request type
+        static VssValidationRequestDataType RequestType();
+
+        #! Response type
+        static VssValidationResponseDataType ResponseType();
+    }
+
     private {
         #! The VSS tree
         VssLoader::VssTree tree;
@@ -36,26 +69,32 @@ public class VssValidationDataProvider inherits DataProvider::AbstractDataProvid
         VssLoader::VssValidator validator;
     }
 
-    #! Creates a validation provider
+    #! Creates a validation provider backed by the given VSS tree
+    /** @param tree the loaded VSS tree containing signal definitions for validation
+    */
     constructor(VssLoader::VssTree tree) {
         self.tree = tree;
         self.validator = new VssLoader::VssValidator(tree);
     }
 
     #! Returns the provider name
+    /** @return \c "validate"
+    */
     string getName() {
         return "validate";
     }
 
-    #! Returns provider description
+    #! Returns a human-readable provider description
+    /** @return the description string
+    */
     *string getDesc() {
         return "Validate signal values against VSS catalog definitions";
     }
 
     #! Handles validation request
-    /** @param req hash with "path" (string) and "value" (auto) keys
+    /** @param req hash with `path` (string) and `value` (auto) keys
 
-        @return hash with "valid" (bool) and "errors" (list) keys
+        @return hash with `valid` (bool) and `errors` (list) keys
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         if (req.typeCode() != NT_HASH) {
@@ -76,16 +115,21 @@ public class VssValidationDataProvider inherits DataProvider::AbstractDataProvid
         };
     }
 
-    #! Returns the request type (NOTHING = any request accepted)
+    #! Returns the request type
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
-        return NOTHING;
+        return RequestType;
+    }
+
+    #! Returns the response type
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return ResponseType;
     }
 
     #! Returns provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return <DataProviderInfo>{
-            "name": getName(),
-            "desc": getDesc(),
+            "name": "validate",
+            "desc": "Validate signal values against VSS catalog definitions",
             "type": "VssValidationDataProvider",
             "supports_request": True,
         };

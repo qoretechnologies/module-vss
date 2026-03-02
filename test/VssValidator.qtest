@@ -3,6 +3,11 @@
 %modern
 
 %requires QUnit
+
+%try-module yaml
+%define NoYaml
+%endtry
+
 %requires ../qlib/VssLoader
 
 %exec-class VssValidatorTest
@@ -10,12 +15,16 @@
 class VssValidatorTest inherits QUnit::Test {
     private {
         string test_data_dir;
+%ifndef NoYaml
         VssTree tree;
         VssValidator validator;
+%endif
     }
 
     constructor() : Test("VssValidatorTest", "1.0") {
         test_data_dir = get_script_dir() + "/data";
+
+%ifndef NoYaml
         tree = new VssTree(test_data_dir + "/vss_v6_subset.yaml");
         validator = new VssValidator(tree);
 
@@ -47,14 +56,21 @@ class VssValidatorTest inherits QUnit::Test {
         addTestCase("validate record mixed valid/invalid", \testValidateRecordMixed());
         addTestCase("validate record all valid", \testValidateRecordAllValid());
 
+        # Array element validation tests
+        addTestCase("array valid string elements", \testArrayValidStringElements());
+        addTestCase("array invalid element type", \testArrayInvalidElementType());
+        addTestCase("array valid int elements for uint8[]", \testArrayValidIntElements());
+
         # Corner cases
         addTestCase("nothing value", \testNothingValue());
         addTestCase("node with no constraints", \testNodeNoConstraints());
         addTestCase("branch node validation", \testBranchNodeValidation());
+%endif
 
         set_return_value(main());
     }
 
+%ifndef NoYaml
     # Type validation
     testTypeValidIntForUint8() {
         list<hash<VssValidationError>> errors = validator.validateValue(
@@ -201,6 +217,64 @@ class VssValidatorTest inherits QUnit::Test {
         assertEq(0, errors.size());
     }
 
+    # Array element validation
+    testArrayValidStringElements() {
+        # create a tree with a string[] typed signal
+        hash<string, hash<VssNode>> nodes = {
+            "Test.Tags": <VssNode>{
+                "name": "Tags",
+                "path": "Test.Tags",
+                "type": "attribute",
+                "datatype": "string[]",
+                "description": "List of tags.",
+            },
+        };
+        VssTree array_tree(nodes);
+        VssValidator array_validator(array_tree);
+
+        list<hash<VssValidationError>> errors = array_validator.validateValue(
+            "Test.Tags", ("tag1", "tag2", "tag3"));
+        assertEq(0, errors.size());
+    }
+
+    testArrayInvalidElementType() {
+        hash<string, hash<VssNode>> nodes = {
+            "Test.Tags": <VssNode>{
+                "name": "Tags",
+                "path": "Test.Tags",
+                "type": "attribute",
+                "datatype": "string[]",
+                "description": "List of tags.",
+            },
+        };
+        VssTree array_tree(nodes);
+        VssValidator array_validator(array_tree);
+
+        # list with a non-string element
+        list<hash<VssValidationError>> errors = array_validator.validateValue(
+            "Test.Tags", ("tag1", 42, "tag3"));
+        assertEq(1, errors.size());
+        assertEq("TYPE_MISMATCH", errors[0].error_type);
+    }
+
+    testArrayValidIntElements() {
+        hash<string, hash<VssNode>> nodes = {
+            "Test.Values": <VssNode>{
+                "name": "Values",
+                "path": "Test.Values",
+                "type": "sensor",
+                "datatype": "uint8[]",
+                "description": "List of uint8 values.",
+            },
+        };
+        VssTree array_tree(nodes);
+        VssValidator array_validator(array_tree);
+
+        list<hash<VssValidationError>> errors = array_validator.validateValue(
+            "Test.Values", (1, 2, 3, 255));
+        assertEq(0, errors.size());
+    }
+
     # Corner cases
     testNothingValue() {
         list<hash<VssValidationError>> errors = validator.validateValue(
@@ -221,4 +295,5 @@ class VssValidatorTest inherits QUnit::Test {
             "Vehicle", "anything");
         assertEq(0, errors.size());
     }
+%endif
 }

@@ -22,12 +22,30 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-public namespace VssDataProcessors {
+public namespace VssDataProvider {
 
 #! Validates records against a VSS catalog
-/** Two modes:
-    - reject_invalid=True: invalid records are dropped (DPC_FILTER)
-    - reject_invalid=False: invalid records are annotated with _vss_validation_errors (DPC_TRANSFORM)
+/** Validates each field in a record against the corresponding VSS signal definition,
+    checking type compatibility, range constraints, and allowed-value enumerations.
+
+    Two modes:
+    - \c reject_invalid=True: invalid records are silently dropped (DPC_FILTER)
+    - \c reject_invalid=False: invalid records pass through with a
+      \c "_vss_validation_errors" annotation (DPC_TRANSFORM)
+
+    @par Fleet Data Quality Pipeline Example
+    @code{.py}
+    VssTree tree("/opt/fleet/vss_rel_4.0.yaml");
+
+    # Mode 1: Filter — drop invalid records before persisting to time-series database
+    VssValidateProcessor strict_validator(tree, True);
+    # Records with out-of-range values or wrong types are silently discarded
+
+    # Mode 2: Annotate — flag invalid records for review in a data quality dashboard
+    VssValidateProcessor lenient_validator(tree, False);
+    # Invalid records pass through with _vss_validation_errors field attached:
+    # {"Vehicle.Speed": "invalid", ..., "_vss_validation_errors": ({...})}
+    @endcode
 */
 public class VssValidateProcessor inherits DataProvider::AbstractDataProcessor {
     private {
@@ -47,7 +65,10 @@ public class VssValidateProcessor inherits DataProvider::AbstractDataProcessor {
         self.reject_invalid = reject_invalid;
     }
 
-    #! Validates a record
+    #! Validates a record against the VSS catalog and enqueues or drops it
+    /** @param enqueue the callback to enqueue the processed record
+        @param _data the input data; non-hash data is passed through unchanged
+    */
     private auto submitImpl(code enqueue, auto _data) {
         if (_data.typeCode() != NT_HASH) {
             enqueue(_data);
@@ -73,7 +94,10 @@ public class VssValidateProcessor inherits DataProvider::AbstractDataProcessor {
         enqueue(record);
     }
 
-    #! Returns the processor capabilities
+    #! Returns the processor capabilities based on the reject mode
+    /** @return @ref DataProvider::DPC_FILTER when reject_invalid is True;
+        @ref DataProvider::DPC_TRANSFORM when False
+    */
     private int getProcessorCapabilitiesImpl() {
         if (reject_invalid) {
             return DataProvider::DPC_FILTER;
@@ -82,4 +106,4 @@ public class VssValidateProcessor inherits DataProvider::AbstractDataProcessor {
     }
 }
 
-} # namespace VssDataProcessors
+} # namespace VssDataProvider

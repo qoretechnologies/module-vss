@@ -3,10 +3,13 @@
 %modern
 
 %requires QUnit
-%requires ../qlib/VssLoader
-%try-module DataProvider
-%define NO_DATAPROVIDER
+
+%try-module yaml
+%define NoYaml
 %endtry
+
+%requires ../qlib/VssLoader
+%requires DataProvider
 %requires ../qlib/VssDataProvider
 
 %exec-class VssDataProviderTest
@@ -19,7 +22,7 @@ class VssDataProviderTest inherits QUnit::Test {
     constructor() : Test("VssDataProviderTest", "1.0") {
         test_data_dir = get_script_dir() + "/data";
 
-%ifndef NO_DATAPROVIDER
+%ifndef NoYaml
         # Factory tests
         addTestCase("factory registration", \testFactoryRegistration());
         addTestCase("factory info", \testFactoryInfo());
@@ -43,14 +46,24 @@ class VssDataProviderTest inherits QUnit::Test {
         addTestCase("validation invalid data", \testValidationInvalid());
         addTestCase("validation missing path key", \testValidationMissingPath());
 
+        # Type class tests
+        addTestCase("signal response type fields", \testSignalResponseType());
+        addTestCase("validation request type fields", \testValidationRequestType());
+        addTestCase("validation response type fields", \testValidationResponseType());
+        addTestCase("signal provider has response type", \testSignalProviderResponseType());
+        addTestCase("validation provider has request and response types",
+            \testValidationProviderTypes());
+        addTestCase("root provider children_can_support_apis", \testRootProviderApiSupport());
+
         # Negative tests
         addTestCase("invalid catalog path", \testInvalidCatalogPath());
         addTestCase("non-existent VSS path navigation", \testNonExistentPath());
 %endif
+
         set_return_value(main());
     }
 
-%ifndef NO_DATAPROVIDER
+%ifndef NoYaml
     # Factory tests
     testFactoryRegistration() {
         auto factory = DataProvider::getFactory("vss");
@@ -206,10 +219,77 @@ class VssDataProviderTest inherits QUnit::Test {
         });
         auto validate = provider.getChildProvider("validate");
 
-        # missing 'path' key should produce an error
-        assertThrows("VSS-VALIDATION-ERROR", "path", sub () {
+        # missing 'path' key should produce a request validation error from the framework
+        assertThrows("INVALID-REQUEST", "path", sub () {
             validate.doRequest({"value": 42});
         });
+    }
+
+    # Type class tests
+    testSignalResponseType() {
+        VssSignalResponseDataType type();
+        *hash<string, AbstractDataField> fields = type.getFields();
+        assertTrue(exists fields);
+        assertTrue(exists fields.path);
+        assertTrue(exists fields.name);
+        assertTrue(exists fields.type);
+        assertTrue(exists fields.datatype);
+        assertTrue(exists fields.unit);
+        assertTrue(exists fields.min);
+        assertTrue(exists fields.max);
+    }
+
+    testValidationRequestType() {
+        VssValidationRequestDataType type();
+        *hash<string, AbstractDataField> fields = type.getFields();
+        assertTrue(exists fields);
+        assertTrue(exists fields.path);
+        assertTrue(exists fields.value);
+        assertEq(2, fields.size());
+    }
+
+    testValidationResponseType() {
+        VssValidationResponseDataType type();
+        *hash<string, AbstractDataField> fields = type.getFields();
+        assertTrue(exists fields);
+        assertTrue(exists fields.valid);
+        assertTrue(exists fields.errors);
+        assertEq(2, fields.size());
+    }
+
+    testSignalProviderResponseType() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto catalog = provider.getChildProvider("catalog");
+        auto vehicle = catalog.getChildProvider("Vehicle");
+        auto speed = vehicle.getChildProvider("Speed");
+
+        assertTrue(speed.getInfo().supports_request);
+        *AbstractDataProviderType resp_type = speed.getResponseType();
+        assertTrue(exists resp_type);
+    }
+
+    testValidationProviderTypes() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto validate = provider.getChildProvider("validate");
+
+        assertTrue(validate.getInfo().supports_request);
+        *AbstractDataProviderType req_type = validate.getRequestType();
+        assertTrue(exists req_type);
+        *AbstractDataProviderType resp_type = validate.getResponseType();
+        assertTrue(exists resp_type);
+    }
+
+    testRootProviderApiSupport() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        hash<DataProviderInfo> info = provider.getInfo();
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
     }
 
     # Negative tests

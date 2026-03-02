@@ -28,7 +28,27 @@ public namespace VssLoader {
 /** VSS overlays allow:
     - Adding new nodes
     - Modifying attributes of existing nodes (overlay wins on conflict)
-    - Deleting nodes (and their children) via the "delete" marker
+    - Deleting nodes (and their children) via the \c "delete" marker
+
+    Overlays are a standard VSS mechanism for customizing a base catalog — for example,
+    adding OEM-specific signals, adjusting min/max ranges for a specific vehicle model,
+    or deprecating signals that are not applicable.
+
+    @par Fleet Catalog Customization Example
+    @code{.py}
+    # Start with the standard COVESA VSS catalog
+    VssVspecParser parser("/opt/fleet/catalogs/");
+    hash<string, hash<VssNode>> base = parser.parseFile("vss_rel_4.0.vspec");
+
+    # Load a fleet-specific overlay that adds custom signals and adjusts ranges
+    hash<string, hash<VssNode>> overlay = parser.parseFile("fleet_overlay.vspec");
+
+    # Apply the overlay: new signals are added, existing ones are updated
+    hash<string, hash<VssNode>> merged = VssOverlayMerger::applyOverlay(base, overlay);
+
+    VssTree tree(merged);
+    printf("Base: %d signals, Merged: %d signals\n", base.size(), tree.size());
+    @endcode
 */
 public class VssOverlayMerger {
     #! Applies a single overlay to a base node map
@@ -48,7 +68,7 @@ public class VssOverlayMerger {
             hash<VssNode> overlay_node = it.getValue();
 
             # delete operation: remove path and all children
-            if (overlay_node.is_delete) {
+            if (boolean(overlay_node.is_delete)) {
                 # remove this path
                 delete result{path};
 

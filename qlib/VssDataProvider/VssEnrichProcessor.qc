@@ -22,10 +22,41 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-public namespace VssDataProcessors {
+public namespace VssDataProvider {
 
 #! Adds metadata to records
-/** Enriches records with static metadata and optionally adds a timestamp.
+/** Enriches each record by merging in static metadata fields and optionally adding a
+    high-resolution \c "_vss_timestamp" field with the current time. This is typically
+    the final stage in a telemetry data pipeline before persistence.
+
+    @par Fleet Record Enrichment Example
+    @code{.py}
+    # Add fleet context metadata to every telemetry record before storing
+    VssEnrichProcessor enricher({
+        "fleet_id": "EU-WEST-42",
+        "vehicle_vin": "WBA3A5C55CF256789",
+        "source": "obd2-adapter-v3",
+    }, True);  # True = add _vss_timestamp
+
+    # Input:  {"Vehicle.Speed": 85, "Vehicle.Powertrain.CombustionEngine.ECT": 90}
+    # Output: {"Vehicle.Speed": 85, ..., "fleet_id": "EU-WEST-42",
+    #          "vehicle_vin": "WBA3A5C55CF256789", "source": "obd2-adapter-v3",
+    #          "_vss_timestamp": 2026-03-01T14:30:22.123456Z}
+    @endcode
+
+    @par End-to-End Pipeline Example
+    @code{.py}
+    # Complete fleet telemetry pipeline: normalize → validate → convert → enrich
+    VssTree tree("/opt/fleet/vss_rel_4.0.yaml");
+    VssUnitConverter converter();
+
+    list<AbstractDataProcessor> pipeline = (
+        new VssNormalizeProcessor(oem_field_map),
+        new VssValidateProcessor(tree, True),     # drop invalid records
+        new VssUnitConvertProcessor(converter, unit_map),
+        new VssEnrichProcessor(fleet_metadata),
+    );
+    @endcode
 */
 public class VssEnrichProcessor inherits DataProvider::AbstractDataProcessor {
     private {
@@ -45,7 +76,10 @@ public class VssEnrichProcessor inherits DataProvider::AbstractDataProcessor {
         self.add_timestamp = add_timestamp;
     }
 
-    #! Enriches a record with metadata
+    #! Enriches a record by merging metadata and optionally adding a timestamp
+    /** @param enqueue the callback to enqueue the enriched record
+        @param _data the input data; non-hash data is passed through unchanged
+    */
     private auto submitImpl(code enqueue, auto _data) {
         if (_data.typeCode() != NT_HASH) {
             enqueue(_data);
@@ -66,10 +100,12 @@ public class VssEnrichProcessor inherits DataProvider::AbstractDataProcessor {
         enqueue(result);
     }
 
-    #! Returns the processor capabilities
+    #! Returns the processor capabilities (transform only — all records pass through)
+    /** @return @ref DataProvider::DPC_TRANSFORM
+    */
     private int getProcessorCapabilitiesImpl() {
         return DataProvider::DPC_TRANSFORM;
     }
 }
 
-} # namespace VssDataProcessors
+} # namespace VssDataProvider

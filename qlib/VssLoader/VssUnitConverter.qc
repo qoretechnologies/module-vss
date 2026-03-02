@@ -25,12 +25,55 @@
 public namespace VssLoader {
 
 #! Provides extensible unit conversion using a factor/offset model
-/** Conversion formula: target = source * factor + offset
+/** Conversion formula: \c target = \c source * \c factor + \c offset
 
-    Includes built-in automotive conversions and supports custom conversions
-    from YAML config files or programmatic registration.
+    Includes built-in automotive conversions (speed, temperature, pressure, distance,
+    mass, length) and supports custom conversions from YAML config files or
+    programmatic registration. Inverse conversions are auto-registered.
 
-    Inverse conversions are auto-registered: source = (target - offset) / factor
+    @par Built-in Automotive Conversions
+    - Speed: km/h ↔ m/s, km/h ↔ mph
+    - Temperature: celsius ↔ fahrenheit, celsius ↔ kelvin
+    - Pressure: kPa ↔ bar, kPa ↔ psi
+    - Distance: km ↔ miles
+    - Mass: kg ↔ lb
+    - Length: mm ↔ inches
+    - Ratio: percent ↔ ratio
+
+    @par Fleet Unit Conversion Example
+    @code{.py}
+    VssUnitConverter converter();
+
+    # Convert European vehicle speed to US units
+    float mph = converter.convert(100.0, "km/h", "mph");   # 62.1371
+    float mps = converter.convert(100.0, "km/h", "m/s");   # 27.7778
+
+    # Convert engine coolant temperature
+    float f = converter.convert(90.0, "celsius", "fahrenheit"); # 194.0
+
+    # Check if a conversion is available before converting
+    if (converter.canConvert("kPa", "psi")) {
+        float psi = converter.convert(220.0, "kPa", "psi"); # 31.9084
+    }
+
+    # Register a custom conversion for fleet-specific units
+    converter.registerConversion("l/100km", "mpg", 235.215, 0.0);
+    @endcode
+
+    @par Custom Conversions from YAML Config
+    @code{.yaml}
+    # fleet-units.yaml
+    conversions:
+      - from: "l/100km"
+        to: "mpg"
+        factor: 235.215
+      - from: "Nm"
+        to: "ft-lb"
+        factor: 0.7376
+    @endcode
+    @code{.py}
+    VssUnitConverter converter("/opt/fleet/config/fleet-units.yaml");
+    @endcode
 */
 public class VssUnitConverter {
     private {
@@ -118,7 +161,9 @@ public class VssUnitConverter {
         return exists conversions{from_unit}{to_unit};
     }
 
-    #! Returns a list of all registered unit names
+    #! Returns a list of all registered unit names (source and target)
+    /** @return a deduplicated list of all unit names that appear in any registered conversion
+    */
     list<string> getUnits() {
         hash<string, bool> units;
         HashIterator it(conversions);
@@ -165,6 +210,9 @@ public class VssUnitConverter {
         @throw VSS-UNIT-CONFIG-ERROR thrown when the config file is invalid
     */
     private loadConfig(string config_path) {
+%ifdef NoYaml
+        throw "YAML-MODULE-MISSING", "cannot load unit config; the yaml module is not available";
+%else
         string content = ReadOnlyFile::readTextFile(config_path);
         auto config;
         try {
@@ -196,6 +244,7 @@ public class VssUnitConverter {
                 exists conv.offset ? float(conv.offset) : 0.0,
             );
         }
+%endif
     }
 }
 
