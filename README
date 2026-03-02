@@ -39,7 +39,9 @@ Testing
   qore test/VssValidator.qtest -vv
   qore test/VssUnitConverter.qtest -vv
   qore test/VssDataProvider.qtest -vv
-  qore test/VssDataProcessors.qtest -vv
+  qore test/VssProcessors.qtest -vv
+  qore test/VssReadDataProvider.qtest -vv
+  qore test/VssRecordIterators.qtest -vv
 
 Documentation
 -------------

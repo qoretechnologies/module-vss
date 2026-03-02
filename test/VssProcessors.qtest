@@ -12,14 +12,14 @@
 %requires DataProvider
 %requires ../qlib/VssDataProvider
 
-%exec-class VssDataProcessorsTest
+%exec-class VssProcessorsTest
 
-class VssDataProcessorsTest inherits QUnit::Test {
+class VssProcessorsTest inherits QUnit::Test {
     private {
         string test_data_dir;
     }
 
-    constructor() : Test("VssDataProcessorsTest", "1.0") {
+    constructor() : Test("VssProcessorsTest", "1.0") {
         test_data_dir = get_script_dir() + "/data";
 
         # VssNormalizeProcessor tests (no yaml dependency)
