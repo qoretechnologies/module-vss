@@ -1,0 +1,338 @@
+#!/usr/bin/env qore
+
+%modern
+
+%requires QUnit
+%requires ../qlib/VssLoader
+%try-module DataProvider
+%define NO_DATAPROVIDER
+%endtry
+%requires ../qlib/VssDataProcessors
+
+%exec-class VssDataProcessorsTest
+
+class VssDataProcessorsTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("VssDataProcessorsTest", "1.0") {
+        test_data_dir = get_script_dir() + "/data";
+
+%ifndef NO_DATAPROVIDER
+        # VssNormalizeProcessor tests
+        addTestCase("normalize field renaming", \testNormalizeFieldRenaming());
+        addTestCase("normalize missing OEM field", \testNormalizeMissingField());
+        addTestCase("normalize capabilities", \testNormalizeCapabilities());
+
+        # VssValidateProcessor tests
+        addTestCase("validate valid record passes", \testValidateValidRecord());
+        addTestCase("validate reject invalid", \testValidateRejectInvalid());
+        addTestCase("validate annotate invalid", \testValidateAnnotateInvalid());
+
+        # VssUnitConvertProcessor tests
+        addTestCase("unit convert specified field", \testUnitConvertField());
+        addTestCase("unit convert unmatched field passes through", \testUnitConvertUnmatchedField());
+
+        # VssEnrichProcessor tests
+        addTestCase("enrich static metadata", \testEnrichStaticMetadata());
+        addTestCase("enrich timestamp", \testEnrichTimestamp());
+        addTestCase("enrich no timestamp", \testEnrichNoTimestamp());
+
+        # Pipeline chain test
+        addTestCase("pipeline chain end-to-end", \testPipelineChain());
+
+        # Corner cases
+        addTestCase("empty record", \testEmptyRecord());
+        addTestCase("no matching fields", \testNoMatchingFields());
+%endif
+        set_return_value(main());
+    }
+
+%ifndef NO_DATAPROVIDER
+    # Helper: collect processor output
+    private list<auto> collectOutput(DataProvider::AbstractDataProcessor proc, auto input) {
+        list<auto> results = ();
+        code enqueue = sub (auto data) {
+            push results, data;
+        };
+        proc.submit(enqueue, input);
+        return results;
+    }
+
+    # VssNormalizeProcessor tests
+    testNormalizeFieldRenaming() {
+        hash<string, string> field_map = {
+            "veh_spd_kph": "Vehicle.Speed",
+            "fuel_pct": "Vehicle.Powertrain.FuelSystem.Level",
+            "is_moving": "Vehicle.IsMoving",
+        };
+
+        VssNormalizeProcessor proc(field_map);
+
+        hash<auto> input = {
+            "veh_spd_kph": 100.5,
+            "fuel_pct": 75,
+            "is_moving": True,
+            "unmapped_field": "ignored",
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertEq(100.5, output."Vehicle.Speed");
+        assertEq(75, output."Vehicle.Powertrain.FuelSystem.Level");
+        assertTrue(output."Vehicle.IsMoving");
+        # unmapped field should NOT be in output
+        assertFalse(exists output.unmapped_field);
+    }
+
+    testNormalizeMissingField() {
+        hash<string, string> field_map = {
+            "veh_spd_kph": "Vehicle.Speed",
+            "fuel_pct": "Vehicle.Powertrain.FuelSystem.Level",
+        };
+
+        VssNormalizeProcessor proc(field_map);
+
+        hash<auto> input = {
+            "veh_spd_kph": 100.0,
+            # fuel_pct is missing
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertEq(100.0, output."Vehicle.Speed");
+        assertFalse(exists output."Vehicle.Powertrain.FuelSystem.Level");
+    }
+
+    testNormalizeCapabilities() {
+        VssNormalizeProcessor proc({"a": "b"});
+        assertEq(DataProvider::DPC_TRANSFORM, proc.getProcessorCapabilities());
+    }
+
+    # VssValidateProcessor tests
+    testValidateValidRecord() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+        VssValidateProcessor proc(tree);
+
+        hash<auto> input = {
+            "Vehicle.Speed": 100.0,
+            "Vehicle.IsMoving": True,
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertEq(100.0, output."Vehicle.Speed");
+        assertFalse(exists output._vss_validation_errors);
+    }
+
+    testValidateRejectInvalid() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+        VssValidateProcessor proc(tree, True);  # reject mode
+
+        hash<auto> input = {
+            "Vehicle.Speed": -10.0,  # invalid: below min
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        # invalid record should be dropped (filtered)
+        assertEq(0, results.size());
+    }
+
+    testValidateAnnotateInvalid() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+        VssValidateProcessor proc(tree, False);  # annotate mode
+
+        hash<auto> input = {
+            "Vehicle.Speed": -10.0,  # invalid: below min
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertTrue(exists output._vss_validation_errors);
+        assertTrue(output._vss_validation_errors.size() > 0);
+    }
+
+    # VssUnitConvertProcessor tests
+    testUnitConvertField() {
+        VssUnitConverter converter();
+        hash<string, hash<string, string>> conversion_map = {
+            "Vehicle.Speed": {"from_unit": "km/h", "to_unit": "m/s"},
+        };
+
+        VssUnitConvertProcessor proc(converter, conversion_map);
+
+        hash<auto> input = {
+            "Vehicle.Speed": 100.0,
+            "Vehicle.IsMoving": True,
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        # 100 km/h ≈ 27.778 m/s
+        assertTrue(abs(float(output."Vehicle.Speed") - 27.778) < 0.1);
+        # IsMoving should pass through unchanged
+        assertTrue(output."Vehicle.IsMoving");
+    }
+
+    testUnitConvertUnmatchedField() {
+        VssUnitConverter converter();
+        hash<string, hash<string, string>> conversion_map = {
+            "Vehicle.Speed": {"from_unit": "km/h", "to_unit": "m/s"},
+        };
+
+        VssUnitConvertProcessor proc(converter, conversion_map);
+
+        hash<auto> input = {
+            "Vehicle.IsMoving": True,
+            # no Vehicle.Speed field
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertTrue(output."Vehicle.IsMoving");
+    }
+
+    # VssEnrichProcessor tests
+    testEnrichStaticMetadata() {
+        hash<auto> metadata = {
+            "_source": "obd2",
+            "_vehicle_id": "VIN12345",
+        };
+
+        VssEnrichProcessor proc(metadata, False);
+
+        hash<auto> input = {
+            "Vehicle.Speed": 100.0,
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertEq(100.0, output."Vehicle.Speed");
+        assertEq("obd2", output._source);
+        assertEq("VIN12345", output._vehicle_id);
+    }
+
+    testEnrichTimestamp() {
+        VssEnrichProcessor proc({}, True);
+
+        hash<auto> input = {
+            "Vehicle.Speed": 100.0,
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertTrue(exists output._vss_timestamp);
+    }
+
+    testEnrichNoTimestamp() {
+        VssEnrichProcessor proc({"_source": "test"}, False);
+
+        hash<auto> input = {
+            "Vehicle.Speed": 100.0,
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+
+        hash<auto> output = results[0];
+        assertFalse(exists output._vss_timestamp);
+    }
+
+    # Pipeline chain test
+    testPipelineChain() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+
+        # Step 1: Normalize OEM fields to VSS paths
+        hash<string, string> field_map = {
+            "veh_spd_kph": "Vehicle.Speed",
+            "is_moving": "Vehicle.IsMoving",
+        };
+        VssNormalizeProcessor normalize(field_map);
+
+        # Step 2: Validate against catalog
+        VssValidateProcessor validate(tree, False);
+
+        # Step 3: Convert units
+        VssUnitConverter converter();
+        VssUnitConvertProcessor convert(converter, {
+            "Vehicle.Speed": {"from_unit": "km/h", "to_unit": "m/s"},
+        });
+
+        # Step 4: Enrich with metadata
+        VssEnrichProcessor enrich({"_source": "pipeline_test"}, True);
+
+        # Run through the pipeline
+        hash<auto> input = {
+            "veh_spd_kph": 100.0,
+            "is_moving": True,
+        };
+
+        # Step 1: normalize
+        list<auto> r1 = collectOutput(normalize, input);
+        assertEq(1, r1.size());
+        assertEq(100.0, r1[0]."Vehicle.Speed");
+
+        # Step 2: validate
+        list<auto> r2 = collectOutput(validate, r1[0]);
+        assertEq(1, r2.size());
+        assertFalse(exists r2[0]._vss_validation_errors);
+
+        # Step 3: convert
+        list<auto> r3 = collectOutput(convert, r2[0]);
+        assertEq(1, r3.size());
+        assertTrue(abs(float(r3[0]."Vehicle.Speed") - 27.778) < 0.1);
+
+        # Step 4: enrich
+        list<auto> r4 = collectOutput(enrich, r3[0]);
+        assertEq(1, r4.size());
+        assertEq("pipeline_test", r4[0]._source);
+        assertTrue(exists r4[0]._vss_timestamp);
+    }
+
+    # Corner cases
+    testEmptyRecord() {
+        hash<string, string> field_map = {
+            "veh_spd_kph": "Vehicle.Speed",
+        };
+        VssNormalizeProcessor proc(field_map);
+
+        hash<auto> input = {};
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+        assertEq(0, results[0].size());
+    }
+
+    testNoMatchingFields() {
+        hash<string, string> field_map = {
+            "veh_spd_kph": "Vehicle.Speed",
+        };
+        VssNormalizeProcessor proc(field_map);
+
+        hash<auto> input = {
+            "completely_different_field": 42,
+        };
+
+        list<auto> results = collectOutput(proc, input);
+        assertEq(1, results.size());
+        assertFalse(exists results[0]."Vehicle.Speed");
+    }
+%endif
+}

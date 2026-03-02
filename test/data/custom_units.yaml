@@ -1,0 +1,13 @@
+conversions:
+  - from: "psi"
+    to: "kPa"
+    factor: 6.89476
+    offset: 0
+  - from: "bar"
+    to: "kPa"
+    factor: 100.0
+    offset: 0
+  - from: "gallon"
+    to: "liter"
+    factor: 3.78541
+    offset: 0

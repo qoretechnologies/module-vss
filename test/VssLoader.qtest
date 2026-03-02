@@ -1,0 +1,555 @@
+#!/usr/bin/env qore
+
+%modern
+
+%requires QUnit
+%requires ../qlib/VssLoader
+
+%exec-class VssLoaderTest
+
+class VssLoaderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("VssLoaderTest", "1.0") {
+        test_data_dir = get_script_dir() + "/data";
+
+        # VssConstants tests
+        addTestCase("type map correctness", \testTypeMapCorrectness());
+        addTestCase("type ranges correctness", \testTypeRangesCorrectness());
+
+        # VssVspecParser tests
+        addTestCase("parse basic vspec", \testParseBasicVspec());
+        addTestCase("parse with includes", \testParseWithIncludes());
+        addTestCase("circular include detection", \testCircularIncludeDetection());
+        addTestCase("malformed yaml", \testMalformedYaml());
+        addTestCase("unknown node type", \testUnknownNodeType());
+        addTestCase("missing type field", \testMissingTypeField());
+
+        # VssTree tests
+        addTestCase("tree from yaml", \testTreeFromYaml());
+        addTestCase("tree from json", \testTreeFromJson());
+        addTestCase("tree from vspec", \testTreeFromVspec());
+        addTestCase("tree getNode", \testTreeGetNode());
+        addTestCase("tree hasPath", \testTreeHasPath());
+        addTestCase("tree getChildNames", \testTreeGetChildNames());
+        addTestCase("tree getChildren", \testTreeGetChildren());
+        addTestCase("tree getLeafNodes", \testTreeGetLeafNodes());
+        addTestCase("tree findPaths", \testTreeFindPaths());
+        addTestCase("tree size", \testTreeSize());
+
+        # VssInstanceExpander tests
+        addTestCase("instance expansion multi-dimensional", \testInstanceExpansionMultiDim());
+        addTestCase("instance expansion list", \testInstanceExpansionList());
+        addTestCase("instance expansion range", \testInstanceExpansionRange());
+        addTestCase("parseInstanceSpec", \testParseInstanceSpec());
+        addTestCase("cartesian product", \testCartesianProduct());
+
+        # VssOverlayMerger tests
+        addTestCase("overlay attribute override", \testOverlayAttributeOverride());
+        addTestCase("overlay add new path", \testOverlayAddNewPath());
+        addTestCase("overlay delete", \testOverlayDelete());
+        addTestCase("overlay delete with children", \testOverlayDeleteWithChildren());
+        addTestCase("multiple overlays", \testMultipleOverlays());
+
+        # Corner cases
+        addTestCase("empty vspec", \testEmptyVspec());
+        addTestCase("node with all optional attributes", \testNodeAllOptionalAttributes());
+        addTestCase("custom OEM metadata preserved", \testCustomOemMetadata());
+        addTestCase("tree from node map", \testTreeFromNodeMap());
+
+        set_return_value(main());
+    }
+
+    # VssConstants tests
+    testTypeMapCorrectness() {
+        assertEq("int", VssToQoreTypeMap."uint8");
+        assertEq("int", VssToQoreTypeMap."int8");
+        assertEq("int", VssToQoreTypeMap."uint16");
+        assertEq("int", VssToQoreTypeMap."int16");
+        assertEq("int", VssToQoreTypeMap."uint32");
+        assertEq("int", VssToQoreTypeMap."int32");
+        assertEq("int", VssToQoreTypeMap."uint64");
+        assertEq("int", VssToQoreTypeMap."int64");
+        assertEq("float", VssToQoreTypeMap."float");
+        assertEq("float", VssToQoreTypeMap."double");
+        assertEq("bool", VssToQoreTypeMap."boolean");
+        assertEq("string", VssToQoreTypeMap."string");
+        assertEq("list", VssToQoreTypeMap."string[]");
+    }
+
+    testTypeRangesCorrectness() {
+        assertEq(0, VssTypeRanges."uint8".min);
+        assertEq(255, VssTypeRanges."uint8".max);
+        assertEq(-128, VssTypeRanges."int8".min);
+        assertEq(127, VssTypeRanges."int8".max);
+        assertEq(0, VssTypeRanges."uint16".min);
+        assertEq(65535, VssTypeRanges."uint16".max);
+        assertEq(-32768, VssTypeRanges."int16".min);
+        assertEq(32767, VssTypeRanges."int16".max);
+    }
+
+    # VssVspecParser tests
+    testParseBasicVspec() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseFile("basic.vspec");
+
+        # check that we got the expected nodes
+        assertTrue(exists nodes."Vehicle");
+        assertTrue(exists nodes."Vehicle.Speed");
+        assertTrue(exists nodes."Vehicle.IsMoving");
+        assertTrue(exists nodes."Vehicle.VehicleIdentification");
+        assertTrue(exists nodes."Vehicle.VehicleIdentification.VIN");
+
+        # check node types
+        assertEq("branch", nodes."Vehicle".type);
+        assertEq("sensor", nodes."Vehicle.Speed".type);
+        assertEq("attribute", nodes."Vehicle.VehicleIdentification.VIN".type);
+
+        # check leaf node details
+        assertEq("float", nodes."Vehicle.Speed".datatype);
+        assertEq("km/h", nodes."Vehicle.Speed".unit);
+        assertEq(0.0, nodes."Vehicle.Speed".min);
+        assertEq(300.0, nodes."Vehicle.Speed".max);
+
+        # check name extraction
+        assertEq("Vehicle", nodes."Vehicle".name);
+        assertEq("Speed", nodes."Vehicle.Speed".name);
+        assertEq("VIN", nodes."Vehicle.VehicleIdentification.VIN".name);
+
+        # check path
+        assertEq("Vehicle.Speed", nodes."Vehicle.Speed".path);
+    }
+
+    testParseWithIncludes() {
+        VssVspecParser parser(test_data_dir + "/with_includes");
+        hash<string, hash<VssNode>> nodes = parser.parseFile("main.vspec");
+
+        # nodes from main file
+        assertTrue(exists nodes."Vehicle");
+        assertTrue(exists nodes."Vehicle.Speed");
+
+        # nodes from Cabin include (mounted at Vehicle.Cabin)
+        assertTrue(exists nodes."Vehicle.Cabin.Cabin");
+        assertTrue(exists nodes."Vehicle.Cabin.Cabin.Temperature");
+
+        # nodes from Powertrain include (mounted at Vehicle.Powertrain)
+        assertTrue(exists nodes."Vehicle.Powertrain.Powertrain");
+        assertTrue(exists nodes."Vehicle.Powertrain.Powertrain.FuelLevel");
+    }
+
+    testCircularIncludeDetection() {
+        # create a temp vspec that includes itself
+        string tmp_dir = "/tmp" + "/vss_circ_test";
+        mkdir(tmp_dir, 0755);
+        on_exit {
+            unlink(tmp_dir + "/self.vspec");
+            rmdir(tmp_dir);
+        }
+
+        {
+            File f();
+            f.open2(tmp_dir + "/self.vspec", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("#include self.vspec\nRoot:\n  type: branch\n  description: test\n");
+        }
+
+        VssVspecParser parser(tmp_dir);
+        assertThrows("VSS-CIRCULAR-INCLUDE", sub () {
+            parser.parseFile("self.vspec");
+        });
+    }
+
+    testMalformedYaml() {
+        VssVspecParser parser(test_data_dir);
+        assertThrows("VSS-PARSE-ERROR", sub () {
+            parser.parseContent("key: value\n  bad: indent", test_data_dir);
+        });
+    }
+
+    testUnknownNodeType() {
+        VssVspecParser parser(test_data_dir);
+        assertThrows("VSS-PARSE-ERROR", sub () {
+            parser.parseContent("Node:\n  type: unknown_type\n  description: test\n", test_data_dir);
+        });
+    }
+
+    testMissingTypeField() {
+        VssVspecParser parser(test_data_dir);
+        assertThrows("VSS-PARSE-ERROR", sub () {
+            parser.parseContent("Node:\n  description: test\n  datatype: string\n", test_data_dir);
+        });
+    }
+
+    # VssTree tests
+    testTreeFromYaml() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+        assertTrue(tree.size() > 0);
+        assertTrue(tree.hasPath("Vehicle"));
+        assertTrue(tree.hasPath("Vehicle.Speed"));
+    }
+
+    testTreeFromJson() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.json");
+        assertTrue(tree.size() > 0);
+        assertTrue(tree.hasPath("Vehicle"));
+        assertTrue(tree.hasPath("Vehicle.Speed"));
+    }
+
+    testTreeFromVspec() {
+        VssTree tree(test_data_dir + "/basic.vspec");
+        assertTrue(tree.size() > 0);
+        assertTrue(tree.hasPath("Vehicle"));
+        assertTrue(tree.hasPath("Vehicle.Speed"));
+    }
+
+    testTreeGetNode() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+
+        *hash<VssNode> node = tree.getNode("Vehicle.Speed");
+        assertTrue(exists node);
+        assertEq("sensor", node.type);
+        assertEq("float", node.datatype);
+        assertEq("km/h", node.unit);
+
+        # non-existent path
+        *hash<VssNode> missing = tree.getNode("Vehicle.NonExistent");
+        assertFalse(exists missing);
+    }
+
+    testTreeHasPath() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+
+        assertTrue(tree.hasPath("Vehicle"));
+        assertTrue(tree.hasPath("Vehicle.Speed"));
+        assertFalse(tree.hasPath("NonExistent"));
+        assertFalse(tree.hasPath("Vehicle.NonExistent"));
+    }
+
+    testTreeGetChildNames() {
+        VssTree tree(test_data_dir + "/basic.vspec");
+
+        # children of Vehicle
+        list<string> children = tree.getChildNames("Vehicle");
+        assertTrue(children.size() > 0);
+        # should contain Speed, IsMoving, TraveledDistance, VehicleIdentification
+        assertTrue(inlist("Speed", children));
+        assertTrue(inlist("IsMoving", children));
+        assertTrue(inlist("VehicleIdentification", children));
+    }
+
+    testTreeGetChildren() {
+        VssTree tree(test_data_dir + "/basic.vspec");
+
+        list<hash<VssNode>> children = tree.getChildren("Vehicle");
+        assertTrue(children.size() > 0);
+
+        # verify at least one child has expected properties
+        bool found_speed = False;
+        foreach hash<VssNode> child in (children) {
+            if (child.name == "Speed") {
+                found_speed = True;
+                assertEq("sensor", child.type);
+                break;
+            }
+        }
+        assertTrue(found_speed);
+    }
+
+    testTreeGetLeafNodes() {
+        VssTree tree(test_data_dir + "/basic.vspec");
+
+        list<hash<VssNode>> leaves = tree.getLeafNodes();
+        assertTrue(leaves.size() > 0);
+
+        # all leaves should be non-branch
+        foreach hash<VssNode> leaf in (leaves) {
+            assertTrue(leaf.type != "branch");
+        }
+    }
+
+    testTreeFindPaths() {
+        VssTree tree(test_data_dir + "/vss_v6_subset.yaml");
+
+        # find all direct children of Vehicle
+        list<string> paths = tree.findPaths("Vehicle.*");
+        assertTrue(paths.size() > 0);
+
+        # find deeper paths
+        list<string> deep_paths = tree.findPaths("Vehicle.Cabin.**");
+        assertTrue(deep_paths.size() > 0);
+    }
+
+    testTreeSize() {
+        VssTree tree(test_data_dir + "/basic.vspec");
+        # basic.vspec has: Vehicle, Vehicle.Speed, Vehicle.IsMoving,
+        # Vehicle.TraveledDistance, Vehicle.VehicleIdentification,
+        # Vehicle.VehicleIdentification.VIN
+        assertEq(6, tree.size());
+    }
+
+    # VssInstanceExpander tests
+    testInstanceExpansionMultiDim() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseFile("instances.vspec");
+
+        hash<string, hash<VssNode>> expanded = VssInstanceExpander::expandAll(nodes);
+
+        # the Door branch should be expanded into Row1.DriverSide, Row1.PassengerSide,
+        # Row2.DriverSide, Row2.PassengerSide
+        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide");
+        assertTrue(exists expanded."Vehicle.Cabin.Row1.PassengerSide");
+        assertTrue(exists expanded."Vehicle.Cabin.Row2.DriverSide");
+        assertTrue(exists expanded."Vehicle.Cabin.Row2.PassengerSide");
+
+        # children should be duplicated under each instance
+        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide.IsOpen");
+        assertTrue(exists expanded."Vehicle.Cabin.Row2.PassengerSide.IsLocked");
+        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide.Window");
+        assertTrue(exists expanded."Vehicle.Cabin.Row1.DriverSide.Window.Position");
+
+        # original template should be removed
+        assertFalse(exists expanded."Vehicle.Cabin.Door");
+        assertFalse(exists expanded."Vehicle.Cabin.Door.IsOpen");
+    }
+
+    testInstanceExpansionList() {
+        hash<string, hash<VssNode>> nodes = {
+            "Vehicle.Chassis.Axle": <VssNode>{
+                "name": "Axle",
+                "path": "Vehicle.Chassis.Axle",
+                "type": "branch",
+                "description": "Axle data.",
+                "instances": ("Row1", "Row2"),
+            },
+            "Vehicle.Chassis.Axle.Speed": <VssNode>{
+                "name": "Speed",
+                "path": "Vehicle.Chassis.Axle.Speed",
+                "type": "sensor",
+                "datatype": "float",
+                "description": "Axle speed.",
+            },
+        };
+
+        hash<string, hash<VssNode>> expanded = VssInstanceExpander::expandAll(nodes);
+
+        assertTrue(exists expanded."Vehicle.Chassis.Row1");
+        assertTrue(exists expanded."Vehicle.Chassis.Row2");
+        assertTrue(exists expanded."Vehicle.Chassis.Row1.Speed");
+        assertTrue(exists expanded."Vehicle.Chassis.Row2.Speed");
+        assertFalse(exists expanded."Vehicle.Chassis.Axle");
+    }
+
+    testInstanceExpansionRange() {
+        list<string> result = VssInstanceExpander::parseInstanceSpec("Row[1,4]");
+        assertEq(4, result.size());
+        assertEq("Row1", result[0]);
+        assertEq("Row2", result[1]);
+        assertEq("Row3", result[2]);
+        assertEq("Row4", result[3]);
+    }
+
+    testParseInstanceSpec() {
+        # list of strings
+        list<string> r1 = VssInstanceExpander::parseInstanceSpec(("Left", "Right"));
+        assertEq(2, r1.size());
+        assertEq("Left", r1[0]);
+        assertEq("Right", r1[1]);
+
+        # range notation
+        list<string> r2 = VssInstanceExpander::parseInstanceSpec("Seat[1,3]");
+        assertEq(3, r2.size());
+        assertEq("Seat1", r2[0]);
+        assertEq("Seat3", r2[2]);
+
+        # single string
+        list<string> r3 = VssInstanceExpander::parseInstanceSpec("Single");
+        assertEq(1, r3.size());
+        assertEq("Single", r3[0]);
+    }
+
+    testCartesianProduct() {
+        list<list<string>> dims = (("Row1", "Row2"), ("Left", "Right"));
+        list<string> result = VssInstanceExpander::cartesianProduct(dims);
+        assertEq(4, result.size());
+        assertEq("Row1.Left", result[0]);
+        assertEq("Row1.Right", result[1]);
+        assertEq("Row2.Left", result[2]);
+        assertEq("Row2.Right", result[3]);
+
+        # empty input
+        list<string> empty_result = VssInstanceExpander::cartesianProduct(());
+        assertEq(0, empty_result.size());
+    }
+
+    # VssOverlayMerger tests
+    testOverlayAttributeOverride() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> base = parser.parseFile("overlay_base.vspec");
+
+        VssVspecParser overlay_parser(test_data_dir);
+        hash<string, hash<VssNode>> overlay = overlay_parser.parseFile("overlay_extend.vspec");
+
+        hash<string, hash<VssNode>> merged = VssOverlayMerger::applyOverlay(base, overlay);
+
+        # Speed max should be overridden to 350
+        assertEq(350.0, merged."Vehicle.Speed".max);
+        # description should be overridden
+        assertEq("Vehicle speed (extended range for racing).", merged."Vehicle.Speed".description);
+        # comment should be added
+        assertTrue(exists merged."Vehicle.Speed".comment);
+    }
+
+    testOverlayAddNewPath() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> base = parser.parseFile("overlay_base.vspec");
+
+        VssVspecParser overlay_parser(test_data_dir);
+        hash<string, hash<VssNode>> overlay = overlay_parser.parseFile("overlay_extend.vspec");
+
+        hash<string, hash<VssNode>> merged = VssOverlayMerger::applyOverlay(base, overlay);
+
+        # Cabin.Humidity should be added
+        assertTrue(exists merged."Vehicle.Cabin.Humidity");
+        assertEq("sensor", merged."Vehicle.Cabin.Humidity".type);
+        assertEq("percent", merged."Vehicle.Cabin.Humidity".unit);
+    }
+
+    testOverlayDelete() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> base = parser.parseFile("overlay_base.vspec");
+
+        VssVspecParser overlay_parser(test_data_dir);
+        hash<string, hash<VssNode>> overlay = overlay_parser.parseFile("overlay_delete.vspec");
+
+        hash<string, hash<VssNode>> merged = VssOverlayMerger::applyOverlay(base, overlay);
+
+        # IsMoving should be deleted
+        assertFalse(exists merged."Vehicle.IsMoving");
+    }
+
+    testOverlayDeleteWithChildren() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> base = parser.parseFile("overlay_base.vspec");
+
+        VssVspecParser overlay_parser(test_data_dir);
+        hash<string, hash<VssNode>> overlay = overlay_parser.parseFile("overlay_delete.vspec");
+
+        hash<string, hash<VssNode>> merged = VssOverlayMerger::applyOverlay(base, overlay);
+
+        # Cabin branch and its children should be deleted
+        assertFalse(exists merged."Vehicle.Cabin");
+        assertFalse(exists merged."Vehicle.Cabin.Temperature");
+    }
+
+    testMultipleOverlays() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> base = parser.parseFile("overlay_base.vspec");
+
+        VssVspecParser extend_parser(test_data_dir);
+        hash<string, hash<VssNode>> extend = extend_parser.parseFile("overlay_extend.vspec");
+
+        VssVspecParser delete_parser(test_data_dir);
+        hash<string, hash<VssNode>> del = delete_parser.parseFile("overlay_delete.vspec");
+
+        hash<string, hash<VssNode>> merged = VssOverlayMerger::applyOverlays(base,
+            (extend, del));
+
+        # extend should have been applied (Humidity added)
+        # but then delete should remove Cabin (and Humidity is under Cabin)
+        assertFalse(exists merged."Vehicle.Cabin");
+        assertFalse(exists merged."Vehicle.Cabin.Humidity");
+
+        # Speed should still have extended max
+        assertEq(350.0, merged."Vehicle.Speed".max);
+    }
+
+    # Corner cases
+    testEmptyVspec() {
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseContent("", test_data_dir);
+        assertEq(0, nodes.size());
+    }
+
+    testNodeAllOptionalAttributes() {
+        string content = "TestNode:
+  type: sensor
+  datatype: uint8
+  description: \"A test node with all optional attributes.\"
+  unit: km/h
+  min: 0
+  max: 255
+  allowed:
+    - 0
+    - 50
+    - 100
+    - 200
+  default: 50
+  comment: \"This is a test comment.\"
+  deprecation: \"V5.0 - replaced by TestNodeV2\"
+";
+
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseContent(content, test_data_dir);
+
+        assertTrue(exists nodes."TestNode");
+        hash<VssNode> node = nodes."TestNode";
+        assertEq("sensor", node.type);
+        assertEq("uint8", node.datatype);
+        assertEq("km/h", node.unit);
+        assertEq(0.0, node.min);
+        assertEq(255.0, node.max);
+        assertTrue(exists node.allowed);
+        assertEq(4, node.allowed.size());
+        assertEq(50, node.default_value);
+        assertEq("This is a test comment.", node.comment);
+        assertTrue(node.deprecation.find("V5.0") >= 0);
+    }
+
+    testCustomOemMetadata() {
+        string content = "Signal:
+  type: sensor
+  datatype: float
+  description: \"Signal with custom metadata.\"
+  dbc:
+    signal_name: VehSpd
+    message_id: 256
+    factor: 0.01
+  vendor_ext: custom_value
+";
+
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseContent(content, test_data_dir);
+
+        assertTrue(exists nodes."Signal");
+        assertTrue(exists nodes."Signal".custom);
+        assertTrue(exists nodes."Signal".custom.dbc);
+        assertEq("VehSpd", nodes."Signal".custom.dbc.signal_name);
+        assertEq(256, nodes."Signal".custom.dbc.message_id);
+        assertEq("custom_value", nodes."Signal".custom.vendor_ext);
+    }
+
+    testTreeFromNodeMap() {
+        hash<string, hash<VssNode>> nodes = {
+            "Vehicle": <VssNode>{
+                "name": "Vehicle",
+                "path": "Vehicle",
+                "type": "branch",
+                "description": "Root.",
+            },
+            "Vehicle.Speed": <VssNode>{
+                "name": "Speed",
+                "path": "Vehicle.Speed",
+                "type": "sensor",
+                "datatype": "float",
+                "description": "Speed.",
+            },
+        };
+
+        VssTree tree(nodes, "6.0");
+        assertEq(2, tree.size());
+        assertEq("6.0", tree.getVersion());
+        assertTrue(tree.hasPath("Vehicle"));
+        assertTrue(tree.hasPath("Vehicle.Speed"));
+    }
+}

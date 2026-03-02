@@ -1,0 +1,14 @@
+Cabin:
+  type: branch
+  description: "All in-cabin components."
+
+Cabin.Temperature:
+  type: sensor
+  datatype: float
+  unit: celsius
+  description: "Temperature inside the cabin."
+
+Cabin.SeatCount:
+  type: attribute
+  datatype: uint8
+  description: "Number of seats in the vehicle."

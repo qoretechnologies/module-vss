@@ -1,0 +1,31 @@
+Vehicle:
+  type: branch
+  description: "High-level vehicle data."
+
+Vehicle.Speed:
+  type: sensor
+  datatype: float
+  unit: km/h
+  min: 0
+  max: 300
+  description: "Vehicle speed."
+
+Vehicle.IsMoving:
+  type: sensor
+  datatype: boolean
+  description: "Whether the vehicle is moving."
+
+Vehicle.TraveledDistance:
+  type: sensor
+  datatype: float
+  unit: km
+  description: "Accumulated distance traveled by the vehicle."
+
+Vehicle.VehicleIdentification:
+  type: branch
+  description: "Attributes that identify a vehicle."
+
+Vehicle.VehicleIdentification.VIN:
+  type: attribute
+  datatype: string
+  description: "17-character Vehicle Identification Number (VIN)."

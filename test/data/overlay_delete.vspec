@@ -1,0 +1,9 @@
+Vehicle.IsMoving:
+  type: sensor
+  delete: true
+  description: "Mark for deletion."
+
+Vehicle.Cabin:
+  type: branch
+  delete: true
+  description: "Mark entire cabin branch for deletion."

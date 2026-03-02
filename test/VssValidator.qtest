@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+
+%modern
+
+%requires QUnit
+%requires ../qlib/VssLoader
+
+%exec-class VssValidatorTest
+
+class VssValidatorTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+        VssTree tree;
+        VssValidator validator;
+    }
+
+    constructor() : Test("VssValidatorTest", "1.0") {
+        test_data_dir = get_script_dir() + "/data";
+        tree = new VssTree(test_data_dir + "/vss_v6_subset.yaml");
+        validator = new VssValidator(tree);
+
+        # Type validation tests
+        addTestCase("type valid int for uint8", \testTypeValidIntForUint8());
+        addTestCase("type invalid string for uint8", \testTypeInvalidStringForUint8());
+        addTestCase("type valid float", \testTypeValidFloat());
+        addTestCase("type valid bool", \testTypeValidBool());
+        addTestCase("type invalid int for bool", \testTypeInvalidIntForBool());
+        addTestCase("type valid string", \testTypeValidString());
+        addTestCase("type float accepted for float type", \testTypeFloatAccepted());
+
+        # Range validation tests
+        addTestCase("range valid uint8", \testRangeValidUint8());
+        addTestCase("range exceed type max uint8", \testRangeExceedTypeMax());
+        addTestCase("range below node min", \testRangeBelowNodeMin());
+        addTestCase("range above node max", \testRangeAboveNodeMax());
+        addTestCase("range valid within node constraints", \testRangeValidWithinConstraints());
+
+        # Enum validation tests
+        addTestCase("enum valid value", \testEnumValidValue());
+        addTestCase("enum invalid value", \testEnumInvalidValue());
+        addTestCase("enum valid powertrain type", \testEnumValidPowertrainType());
+
+        # Unknown path tests
+        addTestCase("unknown path", \testUnknownPath());
+
+        # Batch validation tests
+        addTestCase("validate record mixed valid/invalid", \testValidateRecordMixed());
+        addTestCase("validate record all valid", \testValidateRecordAllValid());
+
+        # Corner cases
+        addTestCase("nothing value", \testNothingValue());
+        addTestCase("node with no constraints", \testNodeNoConstraints());
+        addTestCase("branch node validation", \testBranchNodeValidation());
+
+        set_return_value(main());
+    }
+
+    # Type validation
+    testTypeValidIntForUint8() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Cabin.SeatCount", 5);
+        assertEq(0, errors.size());
+    }
+
+    testTypeInvalidStringForUint8() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Cabin.SeatCount", "five");
+        assertEq(1, errors.size());
+        assertEq("TYPE_MISMATCH", errors[0].error_type);
+    }
+
+    testTypeValidFloat() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Speed", 100.5);
+        assertEq(0, errors.size());
+    }
+
+    testTypeValidBool() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.IsMoving", True);
+        assertEq(0, errors.size());
+    }
+
+    testTypeInvalidIntForBool() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.IsMoving", 1);
+        assertEq(1, errors.size());
+        assertEq("TYPE_MISMATCH", errors[0].error_type);
+    }
+
+    testTypeValidString() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.VehicleIdentification.VIN", "WDB1234567890ABCD");
+        assertEq(0, errors.size());
+    }
+
+    testTypeFloatAccepted() {
+        # int should be accepted where float is expected
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Speed", 100);
+        assertEq(0, errors.size());
+    }
+
+    # Range validation
+    testRangeValidUint8() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Cabin.SeatCount", 200);
+        assertEq(0, errors.size());
+    }
+
+    testRangeExceedTypeMax() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Cabin.SeatCount", 256);
+        assertEq(1, errors.size());
+        assertEq("RANGE_VIOLATION", errors[0].error_type);
+    }
+
+    testRangeBelowNodeMin() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Speed", -1.0);
+        assertEq(1, errors.size());
+        assertEq("RANGE_VIOLATION", errors[0].error_type);
+    }
+
+    testRangeAboveNodeMax() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Speed", 601.0);
+        assertEq(1, errors.size());
+        assertEq("RANGE_VIOLATION", errors[0].error_type);
+    }
+
+    testRangeValidWithinConstraints() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Powertrain.FuelSystem.Level", 50);
+        assertEq(0, errors.size());
+    }
+
+    # Enum validation
+    testEnumValidValue() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Cabin.DriverPosition", 1);
+        assertEq(0, errors.size());
+    }
+
+    testEnumInvalidValue() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Cabin.DriverPosition", 5);
+        assertEq(1, errors.size());
+        assertEq("ENUM_VIOLATION", errors[0].error_type);
+    }
+
+    testEnumValidPowertrainType() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Powertrain.Type", "ELECTRIC");
+        assertEq(0, errors.size());
+
+        list<hash<VssValidationError>> errors2 = validator.validateValue(
+            "Vehicle.Powertrain.Type", "DIESEL");
+        assertEq(1, errors2.size());
+        assertEq("ENUM_VIOLATION", errors2[0].error_type);
+    }
+
+    # Unknown path
+    testUnknownPath() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.NonExistent.Signal", 42);
+        assertEq(1, errors.size());
+        assertEq("UNKNOWN_PATH", errors[0].error_type);
+        assertEq("Vehicle.NonExistent.Signal", errors[0].path);
+    }
+
+    # Batch validation
+    testValidateRecordMixed() {
+        hash<auto> record = {
+            "Vehicle.Speed": 100.0,       # valid
+            "Vehicle.IsMoving": True,      # valid
+            "Vehicle.Cabin.SeatCount": 256, # invalid (range)
+            "Vehicle.NonExistent": 42,      # invalid (unknown path)
+        };
+
+        list<hash<VssValidationError>> errors = validator.validateRecord(record);
+        assertEq(2, errors.size());
+
+        # check that both errors are accounted for
+        hash<string, bool> error_types;
+        foreach hash<VssValidationError> err in (errors) {
+            error_types{err.error_type} = True;
+        }
+        assertTrue(exists error_types."RANGE_VIOLATION");
+        assertTrue(exists error_types."UNKNOWN_PATH");
+    }
+
+    testValidateRecordAllValid() {
+        hash<auto> record = {
+            "Vehicle.Speed": 120.0,
+            "Vehicle.IsMoving": True,
+            "Vehicle.VehicleIdentification.VIN": "WDB1234567890ABCD",
+        };
+
+        list<hash<VssValidationError>> errors = validator.validateRecord(record);
+        assertEq(0, errors.size());
+    }
+
+    # Corner cases
+    testNothingValue() {
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.Speed", NOTHING);
+        assertEq(0, errors.size());
+    }
+
+    testNodeNoConstraints() {
+        # IsMoving has no min/max/allowed - only type validation
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle.IsMoving", True);
+        assertEq(0, errors.size());
+    }
+
+    testBranchNodeValidation() {
+        # validating a branch node should pass without errors
+        list<hash<VssValidationError>> errors = validator.validateValue(
+            "Vehicle", "anything");
+        assertEq(0, errors.size());
+    }
+}

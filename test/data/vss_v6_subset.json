@@ -1,0 +1,358 @@
+{
+  "Vehicle": {
+    "type": "branch",
+    "description": "High-level vehicle data."
+  },
+  "Vehicle.Speed": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "km/h",
+    "min": 0,
+    "max": 600,
+    "description": "Vehicle speed."
+  },
+  "Vehicle.IsMoving": {
+    "type": "sensor",
+    "datatype": "boolean",
+    "description": "Whether the vehicle is moving."
+  },
+  "Vehicle.TraveledDistance": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "km",
+    "description": "Odometer reading, total distance traveled during lifetime."
+  },
+  "Vehicle.TraveledDistanceSinceStart": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "km",
+    "description": "Distance traveled since start of current trip."
+  },
+  "Vehicle.CurrentOverallWeight": {
+    "type": "sensor",
+    "datatype": "uint16",
+    "unit": "kg",
+    "description": "Current overall vehicle weight."
+  },
+  "Vehicle.AverageSpeed": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "km/h",
+    "description": "Average speed for the current trip."
+  },
+  "Vehicle.VehicleIdentification": {
+    "type": "branch",
+    "description": "Attributes that identify a vehicle."
+  },
+  "Vehicle.VehicleIdentification.VIN": {
+    "type": "attribute",
+    "datatype": "string",
+    "description": "17-character Vehicle Identification Number (VIN) as defined by ISO 3779."
+  },
+  "Vehicle.VehicleIdentification.Brand": {
+    "type": "attribute",
+    "datatype": "string",
+    "description": "Vehicle brand or manufacturer."
+  },
+  "Vehicle.VehicleIdentification.Model": {
+    "type": "attribute",
+    "datatype": "string",
+    "description": "Vehicle model."
+  },
+  "Vehicle.VehicleIdentification.Year": {
+    "type": "attribute",
+    "datatype": "uint16",
+    "description": "Model year of the vehicle."
+  },
+  "Vehicle.CurrentLocation": {
+    "type": "branch",
+    "description": "The current latitude and longitude of the vehicle."
+  },
+  "Vehicle.CurrentLocation.Latitude": {
+    "type": "sensor",
+    "datatype": "double",
+    "unit": "degrees",
+    "min": -90,
+    "max": 90,
+    "description": "Current latitude of vehicle in WGS 84 geodetic coordinates."
+  },
+  "Vehicle.CurrentLocation.Longitude": {
+    "type": "sensor",
+    "datatype": "double",
+    "unit": "degrees",
+    "min": -180,
+    "max": 180,
+    "description": "Current longitude of vehicle in WGS 84 geodetic coordinates."
+  },
+  "Vehicle.CurrentLocation.Altitude": {
+    "type": "sensor",
+    "datatype": "double",
+    "unit": "m",
+    "description": "Current altitude relative to WGS 84 reference ellipsoid."
+  },
+  "Vehicle.Cabin": {
+    "type": "branch",
+    "description": "All in-cabin components, including doors, seats, HVAC."
+  },
+  "Vehicle.Cabin.DriverPosition": {
+    "type": "attribute",
+    "datatype": "uint8",
+    "allowed": [1, 2, 3, 4],
+    "description": "The position of the driver seat in row 1."
+  },
+  "Vehicle.Cabin.SeatCount": {
+    "type": "attribute",
+    "datatype": "uint8",
+    "description": "Number of seats in the vehicle."
+  },
+  "Vehicle.Cabin.Door": {
+    "type": "branch",
+    "description": "All doors, including windows and locks."
+  },
+  "Vehicle.Cabin.Door.Row1.DriverSide": {
+    "type": "branch",
+    "description": "Row1 DriverSide door."
+  },
+  "Vehicle.Cabin.Door.Row1.DriverSide.IsOpen": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is open. False = Door is closed."
+  },
+  "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is locked. False = Door is unlocked."
+  },
+  "Vehicle.Cabin.Door.Row1.DriverSide.Window": {
+    "type": "branch",
+    "description": "Door window status."
+  },
+  "Vehicle.Cabin.Door.Row1.DriverSide.Window.Position": {
+    "type": "actuator",
+    "datatype": "uint8",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "Window position. 0 = Fully closed 100 = Fully open."
+  },
+  "Vehicle.Cabin.Door.Row1.PassengerSide": {
+    "type": "branch",
+    "description": "Row1 PassengerSide door."
+  },
+  "Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is open. False = Door is closed."
+  },
+  "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is locked. False = Door is unlocked."
+  },
+  "Vehicle.Cabin.Door.Row2.DriverSide": {
+    "type": "branch",
+    "description": "Row2 DriverSide door."
+  },
+  "Vehicle.Cabin.Door.Row2.DriverSide.IsOpen": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is open. False = Door is closed."
+  },
+  "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is locked. False = Door is unlocked."
+  },
+  "Vehicle.Cabin.Door.Row2.PassengerSide": {
+    "type": "branch",
+    "description": "Row2 PassengerSide door."
+  },
+  "Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is open. False = Door is closed."
+  },
+  "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True = Door is locked. False = Door is unlocked."
+  },
+  "Vehicle.Cabin.HVAC": {
+    "type": "branch",
+    "description": "Heating, Ventilation, and Air Conditioning."
+  },
+  "Vehicle.Cabin.HVAC.AmbientAirTemperature": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "celsius",
+    "description": "Ambient air temperature inside the vehicle."
+  },
+  "Vehicle.Cabin.HVAC.IsAirConditioningActive": {
+    "type": "actuator",
+    "datatype": "boolean",
+    "description": "True if AC is on."
+  },
+  "Vehicle.Powertrain": {
+    "type": "branch",
+    "description": "Powertrain data."
+  },
+  "Vehicle.Powertrain.Type": {
+    "type": "attribute",
+    "datatype": "string",
+    "allowed": ["COMBUSTION", "HYBRID", "ELECTRIC"],
+    "description": "Defines the powertrain type of the vehicle."
+  },
+  "Vehicle.Powertrain.CombustionEngine": {
+    "type": "branch",
+    "description": "Engine-specific data, stopping at the bell housing."
+  },
+  "Vehicle.Powertrain.CombustionEngine.Speed": {
+    "type": "sensor",
+    "datatype": "uint16",
+    "unit": "rpm",
+    "description": "Engine speed measured as rotations per minute."
+  },
+  "Vehicle.Powertrain.CombustionEngine.Power": {
+    "type": "sensor",
+    "datatype": "uint16",
+    "unit": "kW",
+    "description": "Current engine power output."
+  },
+  "Vehicle.Powertrain.FuelSystem": {
+    "type": "branch",
+    "description": "Fuel system data."
+  },
+  "Vehicle.Powertrain.FuelSystem.Level": {
+    "type": "sensor",
+    "datatype": "uint8",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "Level in fuel tank as percent of capacity."
+  },
+  "Vehicle.Powertrain.FuelSystem.Range": {
+    "type": "sensor",
+    "datatype": "uint32",
+    "unit": "m",
+    "description": "Remaining range based on fuel level."
+  },
+  "Vehicle.Powertrain.TractionBattery": {
+    "type": "branch",
+    "description": "Battery management data."
+  },
+  "Vehicle.Powertrain.TractionBattery.StateOfCharge": {
+    "type": "branch",
+    "description": "Information on the state of charge of the vehicle's high voltage battery."
+  },
+  "Vehicle.Powertrain.TractionBattery.StateOfCharge.Current": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "Physical state of charge of the high voltage battery."
+  },
+  "Vehicle.Powertrain.TractionBattery.CurrentVoltage": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "V",
+    "description": "Current voltage of the battery."
+  },
+  "Vehicle.Powertrain.TractionBattery.Range": {
+    "type": "sensor",
+    "datatype": "uint32",
+    "unit": "m",
+    "description": "Remaining range based on battery charge."
+  },
+  "Vehicle.Powertrain.Transmission": {
+    "type": "branch",
+    "description": "Transmission-specific data."
+  },
+  "Vehicle.Powertrain.Transmission.CurrentGear": {
+    "type": "sensor",
+    "datatype": "int8",
+    "description": "The current gear. 0=Neutral. -1..x=Reverse. 1..x=Forward."
+  },
+  "Vehicle.Powertrain.Transmission.Type": {
+    "type": "attribute",
+    "datatype": "string",
+    "allowed": ["UNKNOWN", "SEQUENTIAL", "H", "AUTOMATIC", "DSG", "CVT"],
+    "description": "Transmission type."
+  },
+  "Vehicle.Chassis": {
+    "type": "branch",
+    "description": "All data concerning steering, suspension, wheels, and brakes."
+  },
+  "Vehicle.Chassis.SteeringWheel": {
+    "type": "branch",
+    "description": "Steering wheel data."
+  },
+  "Vehicle.Chassis.SteeringWheel.Angle": {
+    "type": "sensor",
+    "datatype": "int16",
+    "unit": "degrees",
+    "description": "Steering wheel angle. Positive = degrees to the left."
+  },
+  "Vehicle.Chassis.Brake": {
+    "type": "branch",
+    "description": "Brake data."
+  },
+  "Vehicle.Chassis.Brake.PedalPosition": {
+    "type": "sensor",
+    "datatype": "uint8",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "Brake pedal position as percent."
+  },
+  "Vehicle.Chassis.Accelerator": {
+    "type": "branch",
+    "description": "Accelerator data."
+  },
+  "Vehicle.Chassis.Accelerator.PedalPosition": {
+    "type": "sensor",
+    "datatype": "uint8",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "Accelerator pedal position as percent."
+  },
+  "Vehicle.Exterior": {
+    "type": "branch",
+    "description": "Information about exterior measured values."
+  },
+  "Vehicle.Exterior.AirTemperature": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "celsius",
+    "description": "Air temperature outside the vehicle."
+  },
+  "Vehicle.Exterior.Humidity": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "Relative humidity outside the vehicle."
+  },
+  "Vehicle.OBD": {
+    "type": "branch",
+    "description": "OBD data."
+  },
+  "Vehicle.OBD.EngineLoad": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "PID 04 - Engine load in percent."
+  },
+  "Vehicle.OBD.ThrottlePosition": {
+    "type": "sensor",
+    "datatype": "float",
+    "unit": "percent",
+    "min": 0,
+    "max": 100,
+    "description": "PID 11 - Throttle position."
+  }
+}

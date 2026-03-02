@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+
+%modern
+
+%requires QUnit
+%requires ../qlib/VssLoader
+
+%exec-class VssUnitConverterTest
+
+class VssUnitConverterTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("VssUnitConverterTest", "1.0") {
+        test_data_dir = get_script_dir() + "/data";
+
+        # Built-in conversion tests
+        addTestCase("km/h to m/s", \testKmhToMs());
+        addTestCase("m/s to km/h (inverse)", \testMsToKmh());
+        addTestCase("km/h to mph", \testKmhToMph());
+        addTestCase("celsius to fahrenheit", \testCelsiusToFahrenheit());
+        addTestCase("celsius to fahrenheit freezing", \testCelsiusToFahrenheitFreezing());
+        addTestCase("celsius to fahrenheit boiling", \testCelsiusToFahrenheitBoiling());
+        addTestCase("celsius to kelvin", \testCelsiusToKelvin());
+        addTestCase("fahrenheit to celsius (inverse)", \testFahrenheitToCelsius());
+        addTestCase("kPa to bar", \testKpaToBar());
+        addTestCase("kPa to psi", \testKpaToPsi());
+        addTestCase("percent to ratio", \testPercentToRatio());
+        addTestCase("km to miles", \testKmToMiles());
+        addTestCase("kg to lb", \testKgToLb());
+        addTestCase("mm to inches", \testMmToInches());
+
+        # Identity conversion
+        addTestCase("same unit identity", \testSameUnitIdentity());
+
+        # Custom config tests
+        addTestCase("custom conversion from yaml", \testCustomConversionFromYaml());
+
+        # Programmatic registration
+        addTestCase("register conversion", \testRegisterConversion());
+        addTestCase("inverse auto-registration", \testInverseAutoRegistration());
+
+        # canConvert tests
+        addTestCase("canConvert known pair", \testCanConvertKnown());
+        addTestCase("canConvert unknown pair", \testCanConvertUnknown());
+        addTestCase("canConvert same unit", \testCanConvertSameUnit());
+
+        # getUnits
+        addTestCase("getUnits", \testGetUnits());
+
+        # Negative tests
+        addTestCase("unknown unit pair", \testUnknownUnitPair());
+
+        # Corner cases
+        addTestCase("zero value", \testZeroValue());
+        addTestCase("negative value", \testNegativeValue());
+
+        set_return_value(main());
+    }
+
+    # Built-in conversions
+    testKmhToMs() {
+        VssUnitConverter conv();
+        float result = conv.convert(100.0, "km/h", "m/s");
+        # 100 km/h = 27.778 m/s
+        assertTrue(abs(result - 27.778) < 0.1);
+    }
+
+    testMsToKmh() {
+        VssUnitConverter conv();
+        float result = conv.convert(27.778, "m/s", "km/h");
+        assertTrue(abs(result - 100.0) < 0.1);
+    }
+
+    testKmhToMph() {
+        VssUnitConverter conv();
+        float result = conv.convert(100.0, "km/h", "mph");
+        assertTrue(abs(result - 62.137) < 0.1);
+    }
+
+    testCelsiusToFahrenheit() {
+        VssUnitConverter conv();
+        float result = conv.convert(20.0, "celsius", "fahrenheit");
+        assertTrue(abs(result - 68.0) < 0.1);
+    }
+
+    testCelsiusToFahrenheitFreezing() {
+        VssUnitConverter conv();
+        float result = conv.convert(0.0, "celsius", "fahrenheit");
+        assertTrue(abs(result - 32.0) < 0.01);
+    }
+
+    testCelsiusToFahrenheitBoiling() {
+        VssUnitConverter conv();
+        float result = conv.convert(100.0, "celsius", "fahrenheit");
+        assertTrue(abs(result - 212.0) < 0.01);
+    }
+
+    testCelsiusToKelvin() {
+        VssUnitConverter conv();
+        float result = conv.convert(0.0, "celsius", "kelvin");
+        assertTrue(abs(result - 273.15) < 0.01);
+    }
+
+    testFahrenheitToCelsius() {
+        VssUnitConverter conv();
+        float result = conv.convert(212.0, "fahrenheit", "celsius");
+        assertTrue(abs(result - 100.0) < 0.1);
+    }
+
+    testKpaToBar() {
+        VssUnitConverter conv();
+        float result = conv.convert(100.0, "kPa", "bar");
+        assertTrue(abs(result - 1.0) < 0.01);
+    }
+
+    testKpaToPsi() {
+        VssUnitConverter conv();
+        float result = conv.convert(100.0, "kPa", "psi");
+        assertTrue(abs(result - 14.504) < 0.01);
+    }
+
+    testPercentToRatio() {
+        VssUnitConverter conv();
+        float result = conv.convert(75.0, "percent", "ratio");
+        assertTrue(abs(result - 0.75) < 0.001);
+    }
+
+    testKmToMiles() {
+        VssUnitConverter conv();
+        float result = conv.convert(100.0, "km", "miles");
+        assertTrue(abs(result - 62.137) < 0.1);
+    }
+
+    testKgToLb() {
+        VssUnitConverter conv();
+        float result = conv.convert(1.0, "kg", "lb");
+        assertTrue(abs(result - 2.205) < 0.01);
+    }
+
+    testMmToInches() {
+        VssUnitConverter conv();
+        float result = conv.convert(25.4, "mm", "inches");
+        assertTrue(abs(result - 1.0) < 0.01);
+    }
+
+    # Identity
+    testSameUnitIdentity() {
+        VssUnitConverter conv();
+        float result = conv.convert(42.0, "km/h", "km/h");
+        assertEq(42.0, result);
+    }
+
+    # Custom config
+    testCustomConversionFromYaml() {
+        VssUnitConverter conv(test_data_dir + "/custom_units.yaml");
+
+        # gallon to liter from custom config
+        float result = conv.convert(1.0, "gallon", "liter");
+        assertTrue(abs(result - 3.785) < 0.01);
+
+        # inverse should also work
+        float inverse = conv.convert(3.785, "liter", "gallon");
+        assertTrue(abs(inverse - 1.0) < 0.01);
+    }
+
+    # Programmatic registration
+    testRegisterConversion() {
+        VssUnitConverter conv();
+        conv.registerConversion("knots", "km/h", 1.852, 0.0);
+
+        float result = conv.convert(100.0, "knots", "km/h");
+        assertTrue(abs(result - 185.2) < 0.1);
+    }
+
+    testInverseAutoRegistration() {
+        VssUnitConverter conv();
+        conv.registerConversion("nautical_miles", "km", 1.852, 0.0);
+
+        # inverse should be auto-registered
+        assertTrue(conv.canConvert("km", "nautical_miles"));
+        float result = conv.convert(1.852, "km", "nautical_miles");
+        assertTrue(abs(result - 1.0) < 0.01);
+    }
+
+    # canConvert
+    testCanConvertKnown() {
+        VssUnitConverter conv();
+        assertTrue(conv.canConvert("km/h", "m/s"));
+        assertTrue(conv.canConvert("celsius", "fahrenheit"));
+    }
+
+    testCanConvertUnknown() {
+        VssUnitConverter conv();
+        assertFalse(conv.canConvert("parsecs", "lightyears"));
+    }
+
+    testCanConvertSameUnit() {
+        VssUnitConverter conv();
+        assertTrue(conv.canConvert("km/h", "km/h"));
+    }
+
+    # getUnits
+    testGetUnits() {
+        VssUnitConverter conv();
+        list<string> units = conv.getUnits();
+        assertTrue(units.size() > 0);
+        assertTrue(inlist("km/h", units));
+        assertTrue(inlist("celsius", units));
+        assertTrue(inlist("kPa", units));
+    }
+
+    # Negative tests
+    testUnknownUnitPair() {
+        VssUnitConverter conv();
+        assertThrows("VSS-UNIT-ERROR", sub () {
+            conv.convert(1.0, "parsecs", "lightyears");
+        });
+    }
+
+    # Corner cases
+    testZeroValue() {
+        VssUnitConverter conv();
+        float result = conv.convert(0.0, "km/h", "m/s");
+        assertTrue(abs(result) < 0.001);
+    }
+
+    testNegativeValue() {
+        VssUnitConverter conv();
+        float result = conv.convert(-40.0, "celsius", "fahrenheit");
+        # -40°C = -40°F (the crossover point)
+        assertTrue(abs(result - (-40.0)) < 0.01);
+    }
+}

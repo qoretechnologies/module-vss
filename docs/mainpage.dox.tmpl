@@ -1,0 +1,92 @@
+/** @mainpage Qore VSS Module
+
+    @tableofcontents
+
+    @section vssintro Introduction to the VSS Module
+
+    The %VssLoader module provides support for the
+    <a href="https://covesa.github.io/vehicle_signal_specification/">COVESA Vehicle Signal Specification (VSS)</a>,
+    the industry-standard data model for vehicle signals.
+
+    This module is released under the MIT license (see \ref COPYING.MIT "COPYING.MIT"
+    for details).
+
+    To use this module, use \c "%requires VssLoader" in your code.
+
+    All the public symbols in the module are defined in the VssLoader namespace.
+
+    @section vssmodules User Modules
+
+    The following user modules are provided with this module:
+    - @ref VssLoader "VssLoader": Core VSS loading, parsing, and validation functionality
+    - @ref VssDataProvider "VssDataProvider": DataProvider integration for browsable VSS catalog
+    - @ref VssDataProcessors "VssDataProcessors": Pipeline data processors for telemetry normalization
+
+    @section vsscapabilities Capabilities
+
+    - Native \c .vspec file parsing with \c #include directive resolution
+    - Instance expansion (e.g. \c "Row[1,4]" to concrete paths)
+    - Overlay merging (attribute override, path addition/deletion)
+    - Pre-exported VSS JSON/YAML loading
+    - Data validation against VSS catalogs (type, range, enum checks)
+    - Extensible unit conversion (factor/offset model)
+    - DataProvider browsable tree navigation
+    - Pipeline processors: normalize, validate, convert, enrich
+
+    @section vssexamples Examples
+
+    @par Loading a VSS tree from a pre-exported file
+    @code{.py}
+%requires VssLoader
+
+VssTree tree("/path/to/vss_v6.yaml");
+printf("VSS tree has %d nodes\n", tree.size());
+printf("Vehicle.Speed: %y\n", tree.getNode("Vehicle.Speed"));
+    @endcode
+
+    @par Parsing native .vspec files
+    @code{.py}
+%requires VssLoader
+
+VssVspecParser parser("/path/to/vspec/dir");
+hash<string, hash<VssNode>> nodes = parser.parseFile("Vehicle.vspec");
+
+# expand instances
+nodes = VssInstanceExpander::expandAll(nodes);
+
+VssTree tree(nodes, "6.0");
+    @endcode
+
+    @par Validating signal data
+    @code{.py}
+%requires VssLoader
+
+VssTree tree("/path/to/vss_v6.yaml");
+VssValidator validator(tree);
+
+list<hash<VssValidationError>> errors = validator.validateRecord({
+    "Vehicle.Speed": 120.5,
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsOpen": True,
+});
+    @endcode
+
+    @par Unit conversion
+    @code{.py}
+%requires VssLoader
+
+VssUnitConverter converter();
+float speed_ms = converter.convert(100.0, "km/h", "m/s");
+    @endcode
+
+    @section vssreleasenotes Release Notes
+
+    @subsection vss_1_0 VssLoader 1.0
+    - initial release
+    - native \c .vspec file parsing with \c #include resolution
+    - instance expansion and overlay merging
+    - pre-exported VSS JSON/YAML loading
+    - data validation (type, range, enum, unknown path)
+    - unit conversion with factor/offset model
+    - DataProvider integration with browsable VSS catalog
+    - pipeline data processors (normalize, validate, convert, enrich)
+*/

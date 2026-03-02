@@ -1,0 +1,26 @@
+Vehicle:
+  type: branch
+  description: "High-level vehicle data."
+
+Vehicle.Speed:
+  type: sensor
+  datatype: float
+  unit: km/h
+  min: 0
+  max: 300
+  description: "Vehicle speed."
+
+Vehicle.IsMoving:
+  type: sensor
+  datatype: boolean
+  description: "Whether the vehicle is moving."
+
+Vehicle.Cabin:
+  type: branch
+  description: "All in-cabin components."
+
+Vehicle.Cabin.Temperature:
+  type: sensor
+  datatype: float
+  unit: celsius
+  description: "Temperature inside the cabin."

@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+
+%modern
+
+%requires QUnit
+%requires ../qlib/VssLoader
+%try-module DataProvider
+%define NO_DATAPROVIDER
+%endtry
+%requires ../qlib/VssDataProvider
+
+%exec-class VssDataProviderTest
+
+class VssDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("VssDataProviderTest", "1.0") {
+        test_data_dir = get_script_dir() + "/data";
+
+%ifndef NO_DATAPROVIDER
+        # Factory tests
+        addTestCase("factory registration", \testFactoryRegistration());
+        addTestCase("factory info", \testFactoryInfo());
+
+        # Root provider tests
+        addTestCase("root provider creation", \testRootProviderCreation());
+        addTestCase("root provider children", \testRootProviderChildren());
+        addTestCase("root provider missing catalog_path", \testRootProviderMissingPath());
+
+        # Catalog navigation tests
+        addTestCase("catalog root children", \testCatalogRootChildren());
+        addTestCase("catalog navigate to speed", \testCatalogNavigateToSpeed());
+        addTestCase("catalog navigate deep path", \testCatalogNavigateDeepPath());
+        addTestCase("catalog getChildProviderNames at each level", \testCatalogChildNames());
+
+        # Signal provider tests
+        addTestCase("signal metadata retrieval", \testSignalMetadata());
+
+        # Validation provider tests
+        addTestCase("validation valid data", \testValidationValid());
+        addTestCase("validation invalid data", \testValidationInvalid());
+        addTestCase("validation missing path key", \testValidationMissingPath());
+
+        # Negative tests
+        addTestCase("invalid catalog path", \testInvalidCatalogPath());
+        addTestCase("non-existent VSS path navigation", \testNonExistentPath());
+%endif
+        set_return_value(main());
+    }
+
+%ifndef NO_DATAPROVIDER
+    # Factory tests
+    testFactoryRegistration() {
+        auto factory = DataProvider::getFactory("vss");
+        assertTrue(exists factory);
+    }
+
+    testFactoryInfo() {
+        VssDataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("vss", info.name);
+        assertTrue(exists info.desc);
+    }
+
+    # Root provider tests
+    testRootProviderCreation() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        assertEq("vss", provider.getName());
+    }
+
+    testRootProviderChildren() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+
+        *list<string> children = provider.getChildProviderNames();
+        assertTrue(exists children);
+        assertEq(2, children.size());
+        assertTrue(inlist("catalog", children));
+        assertTrue(inlist("validate", children));
+    }
+
+    testRootProviderMissingPath() {
+        assertThrows("VSS-PROVIDER-ERROR", sub () {
+            new VssRootDataProvider({});
+        });
+    }
+
+    # Catalog navigation tests
+    testCatalogRootChildren() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto catalog = provider.getChildProvider("catalog");
+        assertTrue(exists catalog);
+
+        *list<string> children = catalog.getChildProviderNames();
+        assertTrue(exists children);
+        assertTrue(inlist("Vehicle", children));
+    }
+
+    testCatalogNavigateToSpeed() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto catalog = provider.getChildProvider("catalog");
+        auto vehicle = catalog.getChildProvider("Vehicle");
+        assertTrue(exists vehicle);
+
+        auto speed = vehicle.getChildProvider("Speed");
+        assertTrue(exists speed);
+
+        # Speed is a leaf node, should be a signal provider that supports requests
+        hash<DataProviderInfo> info = speed.getInfo();
+        assertTrue(info.supports_request);
+    }
+
+    testCatalogNavigateDeepPath() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto catalog = provider.getChildProvider("catalog");
+        auto vehicle = catalog.getChildProvider("Vehicle");
+        auto powertrain = vehicle.getChildProvider("Powertrain");
+        assertTrue(exists powertrain);
+
+        auto fuel = powertrain.getChildProvider("FuelSystem");
+        assertTrue(exists fuel);
+
+        auto level = fuel.getChildProvider("Level");
+        assertTrue(exists level);
+    }
+
+    testCatalogChildNames() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto catalog = provider.getChildProvider("catalog");
+        auto vehicle = catalog.getChildProvider("Vehicle");
+
+        *list<string> vehicle_children = vehicle.getChildProviderNames();
+        assertTrue(exists vehicle_children);
+        assertTrue(vehicle_children.size() > 0);
+        assertTrue(inlist("Speed", vehicle_children));
+        assertTrue(inlist("Cabin", vehicle_children));
+        assertTrue(inlist("Powertrain", vehicle_children));
+    }
+
+    # Signal provider tests
+    testSignalMetadata() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto catalog = provider.getChildProvider("catalog");
+        auto vehicle = catalog.getChildProvider("Vehicle");
+        auto speed = vehicle.getChildProvider("Speed");
+
+        auto metadata = speed.doRequest(NOTHING);
+        assertTrue(metadata.typeCode() == NT_HASH);
+        assertEq("Vehicle.Speed", metadata.path);
+        assertEq("sensor", metadata.type);
+        assertEq("float", metadata.datatype);
+        assertEq("km/h", metadata.unit);
+    }
+
+    # Validation provider tests
+    testValidationValid() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto validate = provider.getChildProvider("validate");
+        assertTrue(exists validate);
+
+        auto result = validate.doRequest({
+            "path": "Vehicle.Speed",
+            "value": 100.0,
+        });
+
+        assertTrue(result.typeCode() == NT_HASH);
+        assertTrue(result.valid);
+        assertEq(0, result.errors.size());
+    }
+
+    testValidationInvalid() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto validate = provider.getChildProvider("validate");
+
+        auto result = validate.doRequest({
+            "path": "Vehicle.Speed",
+            "value": -10.0,
+        });
+
+        assertFalse(result.valid);
+        assertTrue(result.errors.size() > 0);
+    }
+
+    testValidationMissingPath() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto validate = provider.getChildProvider("validate");
+
+        # missing 'path' key should produce an error
+        assertThrows("VSS-VALIDATION-ERROR", "path", sub () {
+            validate.doRequest({"value": 42});
+        });
+    }
+
+    # Negative tests
+    testInvalidCatalogPath() {
+        assertThrows("FILE-OPEN2-ERROR", sub () {
+            new VssRootDataProvider({
+                "catalog_path": "/nonexistent/path/to/catalog.yaml",
+            });
+        });
+    }
+
+    testNonExistentPath() {
+        VssRootDataProvider provider({
+            "catalog_path": test_data_dir + "/vss_v6_subset.yaml",
+        });
+        auto catalog = provider.getChildProvider("catalog");
+        auto vehicle = catalog.getChildProvider("Vehicle");
+
+        auto nonexistent = vehicle.getChildProvider("NonExistentSignal");
+        assertFalse(exists nonexistent);
+    }
+%endif
+}

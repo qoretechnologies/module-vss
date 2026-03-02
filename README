@@ -1,0 +1,51 @@
+Qore COVESA VSS Module
+======================
+
+Introduction
+------------
+The Qore VSS module provides support for the COVESA Vehicle Signal
+Specification (VSS), the industry-standard data model for vehicle signals.
+
+This module includes:
+  - VssLoader: Native .vspec file parsing (including #include directives,
+    instance expansion, overlay merging), pre-exported VSS JSON/YAML loading,
+    data validation against VSS catalogs, and extensible unit conversion
+  - VssDataProvider: Qorus DataProvider integration for browsable VSS catalog
+    navigation, signal metadata retrieval, and data validation
+  - VssDataProcessors: Pipeline data processors for telemetry normalization,
+    validation, unit conversion, and enrichment
+
+Requirements
+------------
+  - Qore 2.0+
+  - yaml module (for YAML/vspec parsing)
+  - DataProvider module (for VssDataProvider and VssDataProcessors)
+
+License
+-------
+This module is released under the MIT license; see COPYING.MIT for details.
+
+Building
+--------
+  mkdir build
+  cd build
+  cmake .. -DCMAKE_INSTALL_PREFIX=/usr
+  make
+  sudo make install
+
+Testing
+-------
+  export QORE_MODULE_DIR=qlib:${QORE_MODULE_DIR}
+  qore test/VssLoader.qtest -vv
+  qore test/VssValidator.qtest -vv
+  qore test/VssUnitConverter.qtest -vv
+  qore test/VssDataProvider.qtest -vv
+  qore test/VssDataProcessors.qtest -vv
+
+Documentation
+-------------
+See docs/ directory for Doxygen documentation.
+
+Author
+------
+Qore Technologies, s.r.o. (david@qore.org)

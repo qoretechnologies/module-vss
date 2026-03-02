@@ -1,0 +1,14 @@
+Vehicle:
+  type: branch
+  description: "High-level vehicle data."
+
+Vehicle.Speed:
+  type: sensor
+  datatype: float
+  unit: km/h
+  min: 0
+  max: 300
+  description: "Vehicle speed."
+
+#include Cabin/Cabin.vspec Vehicle.Cabin
+#include Powertrain/Powertrain.vspec Vehicle.Powertrain

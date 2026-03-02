@@ -1,0 +1,17 @@
+Powertrain:
+  type: branch
+  description: "Powertrain data for the vehicle."
+
+Powertrain.FuelLevel:
+  type: sensor
+  datatype: uint8
+  unit: percent
+  min: 0
+  max: 100
+  description: "Current fuel level as a percent of maximum."
+
+Powertrain.EngineSpeed:
+  type: sensor
+  datatype: uint16
+  unit: rpm
+  description: "Engine rotational speed."

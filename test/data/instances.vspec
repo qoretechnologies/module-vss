@@ -1,0 +1,38 @@
+Vehicle:
+  type: branch
+  description: "High-level vehicle data."
+
+Vehicle.Cabin:
+  type: branch
+  description: "All in-cabin components."
+
+Vehicle.Cabin.Door:
+  type: branch
+  description: "All doors."
+  instances:
+    - - "Row1"
+      - "Row2"
+    - - "DriverSide"
+      - "PassengerSide"
+
+Vehicle.Cabin.Door.IsOpen:
+  type: actuator
+  datatype: boolean
+  description: "True = Door open. False = Door closed."
+
+Vehicle.Cabin.Door.IsLocked:
+  type: actuator
+  datatype: boolean
+  description: "True = Door locked. False = Door unlocked."
+
+Vehicle.Cabin.Door.Window:
+  type: branch
+  description: "Door window status."
+
+Vehicle.Cabin.Door.Window.Position:
+  type: actuator
+  datatype: uint8
+  unit: percent
+  min: 0
+  max: 100
+  description: "Window position. 0 = Fully closed. 100 = Fully open."
