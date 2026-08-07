@@ -49,6 +49,7 @@ module VssDataProvider {
         # Register VSS app
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": VssDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "VSS Data",
             "short_desc": "Ingest and process vehicle signal telemetry data",
             "desc": "Ingest, validate, and transform vehicle telemetry data using the COVESA Vehicle "
