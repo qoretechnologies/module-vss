@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.VlNT.action.cmVhZA.desc": {
+          "source": "Reads vehicle signal telemetry records from a JSON or YAML data file for processing in data pipelines",
+          "message": "데이터 파이프라인에서 처리하기 위해 JSON 또는 YAML 데이터 파일에서 차량 신호 텔레메트리 레코드를 읽습니다"
+        },
+        "app.VlNT.action.cmVhZA.display_name": {
+          "source": "Read VSS Data",
+          "message": "VSS 데이터 읽기"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Telemetry data as a JSON array of record objects or a single object",
+          "message": "레코드 객체의 JSON 배열 또는 단일 객체 형태의 텔레메트리 데이터"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "JSON format",
+          "message": "JSON 형식"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Telemetry data as a YAML multi-document stream or sequence of mappings",
+          "message": "YAML 다중 문서 스트림 또는 매핑 시퀀스 형태의 텔레메트리 데이터"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "YAML format",
+          "message": "YAML 형식"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.desc": {
+          "source": "Format of the telemetry data: `json` or `yaml`; auto-detected from the file extension if not provided",
+          "message": "텔레메트리 데이터의 형식: `json` 또는 `yaml`. 제공되지 않으면 파일 확장자에서 자동으로 감지됩니다"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.display_name": {
+          "source": "Data Format",
+          "message": "데이터 형식"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.short_desc": {
+          "source": "Format of the telemetry data file",
+          "message": "텔레메트리 데이터 파일의 형식"
+        },
+        "app.VlNT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "Path or URL to the vehicle telemetry data file to read; use instead of `stream` or `data`",
+          "message": "읽을 차량 텔레메트리 데이터 파일의 경로 또는 URL입니다. `stream` 또는 `data` 대신 사용하세요"
+        },
+        "app.VlNT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Input Path",
+          "message": "입력 경로"
+        },
+        "app.VlNT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Location of the vehicle telemetry data file",
+          "message": "차량 텔레메트리 데이터 파일의 위치"
+        },
+        "app.VlNT.action.cmVhZA.short_desc": {
+          "source": "Read vehicle telemetry records from a data file",
+          "message": "데이터 파일에서 차량 텔레메트리 레코드 읽기"
+        },
+        "app.VlNT.desc": {
+          "source": "Ingest, validate, and transform vehicle telemetry data using the COVESA Vehicle Signal Specification (VSS) standard for fleet analytics and IoT applications",
+          "message": "플릿 분석 및 IoT 애플리케이션을 위해 COVESA VSS(Vehicle Signal Specification) 표준을 사용하여 차량 텔레메트리 데이터를 수집, 유효성 검사 및 변환합니다"
+        },
+        "app.VlNT.display_name": {
+          "source": "VSS Data",
+          "message": "VSS 데이터"
+        },
+        "app.VlNT.short_desc": {
+          "source": "Ingest and process vehicle signal telemetry data",
+          "message": "차량 신호 텔레메트리 데이터 수집 및 처리"
+        }
+      }
+    }
+  }
+}

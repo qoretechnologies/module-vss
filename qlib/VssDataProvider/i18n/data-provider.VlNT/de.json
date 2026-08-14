@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.VlNT.action.cmVhZA.desc": {
+          "source": "Reads vehicle signal telemetry records from a JSON or YAML data file for processing in data pipelines",
+          "message": "Liest Fahrzeugsignal-Telemetriedatensätze aus einer JSON- oder YAML-Datendatei zur Verarbeitung in Datenpipelines"
+        },
+        "app.VlNT.action.cmVhZA.display_name": {
+          "source": "Read VSS Data",
+          "message": "VSS-Daten lesen"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Telemetry data as a JSON array of record objects or a single object",
+          "message": "Telemetriedaten als JSON-Array von Datensatzobjekten oder als einzelnes Objekt"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "JSON format",
+          "message": "JSON-Format"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Telemetry data as a YAML multi-document stream or sequence of mappings",
+          "message": "Telemetriedaten als YAML-Multi-Dokumenten-Stream oder Folge von Mappings"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "YAML format",
+          "message": "YAML-Format"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.desc": {
+          "source": "Format of the telemetry data: `json` or `yaml`; auto-detected from the file extension if not provided",
+          "message": "Format der Telemetriedaten: `json` oder `yaml`; wird anhand der Dateiendung automatisch erkannt, falls nicht angegeben"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.display_name": {
+          "source": "Data Format",
+          "message": "Datenformat"
+        },
+        "app.VlNT.action.cmVhZA.option.Zm9ybWF0.short_desc": {
+          "source": "Format of the telemetry data file",
+          "message": "Format der Telemetriedatendatei"
+        },
+        "app.VlNT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "Path or URL to the vehicle telemetry data file to read; use instead of `stream` or `data`",
+          "message": "Pfad oder URL zur zu lesenden Fahrzeug-Telemetriedatendatei; anstelle von `stream` oder `data` verwenden"
+        },
+        "app.VlNT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Input Path",
+          "message": "Eingabepfad"
+        },
+        "app.VlNT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Location of the vehicle telemetry data file",
+          "message": "Speicherort der Fahrzeug-Telemetriedatendatei"
+        },
+        "app.VlNT.action.cmVhZA.short_desc": {
+          "source": "Read vehicle telemetry records from a data file",
+          "message": "Fahrzeugtelemetriedatensätze aus einer Datendatei lesen"
+        },
+        "app.VlNT.desc": {
+          "source": "Ingest, validate, and transform vehicle telemetry data using the COVESA Vehicle Signal Specification (VSS) standard for fleet analytics and IoT applications",
+          "message": "Erfassen, Validieren und Transformieren von Fahrzeugtelemetriedaten mithilfe des COVESA Vehicle Signal Specification (VSS)-Standards für Flottenanalysen und IoT-Anwendungen"
+        },
+        "app.VlNT.display_name": {
+          "source": "VSS Data",
+          "message": "VSS-Daten"
+        },
+        "app.VlNT.short_desc": {
+          "source": "Ingest and process vehicle signal telemetry data",
+          "message": "Fahrzeugsignal-Telemetriedaten erfassen und verarbeiten"
+        }
+      }
+    }
+  }
+}
