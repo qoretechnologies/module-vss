@@ -12,10 +12,11 @@
 %define NoJson
 %endtry
 
-%requires ../qlib/VssLoader
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires VssLoader
 %requires DataProvider
 %requires FileLocationHandler
-%requires ../qlib/VssDataProvider
+%requires VssDataProvider
 
 %exec-class VssReadDataProviderTest
 

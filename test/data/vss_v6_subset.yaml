@@ -1,7 +1,10 @@
 # Curated subset of COVESA VSS v6.0 for testing purposes
 # Based on the Vehicle Signal Specification by COVESA
-# Licensed under CC-BY-4.0: https://creativecommons.org/licenses/by/4.0/
-# Original source: https://github.com/COVESA/vehicle_signal_specification
+# SPDX-License-Identifier: MPL-2.0
+# Copyright COVESA and contributors; test modifications (C) 2026 Qore Technologies, s.r.o.
+# This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+# See COPYING.MPL-2.0 or https://mozilla.org/MPL/2.0/.
+# Original source: https://github.com/COVESA/vehicle_signal_specification/tree/v6.0
 
 Vehicle:
   type: branch

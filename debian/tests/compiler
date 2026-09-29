@@ -1,0 +1,24 @@
+#!/bin/sh
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+set -eu
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR LD_LIBRARY_PATH LD_PRELOAD
+cp test/data/basic.vspec "$AUTOPKGTEST_TMP/"
+cd "$AUTOPKGTEST_TMP"
+cat > vss-smoke.q <<'EOF'
+%modern
+%requires VssLoader
+%requires DataProvider
+%requires VssDataProvider
+VssTree tree("basic.vspec");
+VssUnitConverter converter();
+VssValidator validator(tree);
+if (tree.size() != 6 || !tree.hasPath("Vehicle.Speed")
+        || converter.convert(90.0, "celsius", "fahrenheit") != 194.0
+        || !validator.validateRecord({"Vehicle.Speed": 85}).empty()
+        || DataProvider::getFactory("vss").getInfo().name != "vss") {
+    throw "PACKAGE-TEST-ERROR", "Installed VSS loading, validation, conversion or provider failed";
+}
+EOF
+/usr/bin/qcc -o vss-smoke vss-smoke.q
+./vss-smoke

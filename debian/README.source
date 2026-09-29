@@ -1,0 +1,76 @@
+Debian/Ubuntu packaging for the VSS modules
+=========================================
+
+qore-vss-module contains VssLoader and VssDataProvider sources, AOT-compiled
+modules, provider resources and translation catalogs. The runtime package is
+Architecture: any because qcc emits native code even though this project has
+no C++ sources. qore-vss-module-doc contains both HTML API references and the
+complete upstream test scripts/data. Debhelper creates detached debug symbols.
+
+Build prerequisites and supported scope
+--------------------------------------
+
+Use an isolated native build environment with the packaged Qore runtime/SDK
+and Build-Depends from debian/control. The qualification target is Ubuntu
+26.04 amd64 with Qore 3.0 development packages. Other releases/architectures
+need their own matching SDK and native build/test run. Cross builds are rejected
+because Qore/qcc execute during compilation and documentation generation.
+
+JSON and YAML are included with the required Qore 3.0 runtime. Tests explicitly
+load both before running, so optional compatibility paths in the upstream
+sources cannot hide missing package dependencies. No service or network account
+is needed; all catalogs and telemetry inputs are local test fixtures.
+
+The build preserves distribution hardening flags and qcc debug information.
+QCC_JOBS=1 fixes AOT partitioning independently of build job count; independent
+targets still run in parallel. dh_strip is wrapped to preserve Qore dependency,
+source-location and optional-module trailers. dwz is disabled for these AOT
+objects because it does not support all LLVM DWARF forms. Runtime/libqore SONAME
+dependencies derive from the installed SDK; other libraries use dh_shlibdeps.
+The package is not Multi-Arch: same because it requires the native interpreter.
+
+The module implementation is MIT. The curated test/data/vss_v6_subset.yaml
+fixture derives from COVESA VSS v6.0 and is MPL-2.0, including its modifications.
+It is shipped in editable source form with attribution and the upstream license
+in COPYING.MPL-2.0; debian/copyright records this separately. Other test data
+are local fixtures. No full upstream vehicle catalog is bundled.
+
+Source and binary builds
+------------------------
+
+Use a new version for each changed upload. This snapshot precedes version 1.0.0.
+From a clean committed checkout:
+
+    version=1.0.0~git20260928.1
+    mkdir -p ../vss-package-work
+    git archive --format=tar --prefix="qore-vss-module-$version/" \
+        HEAD -- . ':!debian' | xz > \
+        "../vss-package-work/qore-vss-module_$version.orig.tar.xz"
+    tar -xf "../vss-package-work/qore-vss-module_$version.orig.tar.xz" \
+        -C ../vss-package-work
+    cp -a debian "../vss-package-work/qore-vss-module-$version/"
+    cd "../vss-package-work/qore-vss-module-$version"
+    dpkg-buildpackage -S -us -uc
+
+Extract the .dsc with dpkg-source -x. With dependencies preinstalled, build
+unprivileged with networking disabled:
+
+    dpkg-buildpackage -b -us -uc
+
+Architecture-only builds (-B) need no Doxygen; independent builds (-A) produce
+HTML documentation. Both DEB_BUILD_OPTIONS=nodoc and DEB_BUILD_PROFILES=nodoc
+suppress documentation; the profile also omits the doc package. Do not use
+nocheck for qualification.
+
+Qualification and publication
+-----------------------------
+
+Run all seven suites against the exact compiled modules, installed packages
+away from checkout paths, and source modules separately. A fresh qcc executable
+loads a VSS catalog, validates telemetry, converts units and uses the provider
+factory. Verify installed resources/catalogs and AOT trailer parity, all standard
+locale translations, source/binary Lintian, hardening/debug symbols, minimal
+installation without the SDK, docs/debug coinstallation, dpkg -V, purge/reinstall,
+and byte reproducibility at different paths and parallelism levels.
+Retain exact source/package hashes, dependency versions, audit and test logs.
+Testing PPA publication is separate from approval for a final general release.

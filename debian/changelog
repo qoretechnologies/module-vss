@@ -1,0 +1,10 @@
+qore-vss-module (1.0.0~git20260928.1-0qore1~ubuntu26.04) resolute; urgency=medium
+
+  * Package VssLoader/VssDataProvider sources and compiled modules,
+    provider resources/translations, documentation and complete test fixtures.
+  * Add installed runtime/compiler tests, AOT metadata preservation,
+    documentation profiles and reproducible offline builds.
+  * Allow upstream tests to run against either source or installed modules.
+  * Correct the derived VSS fixture attribution to the upstream MPL-2.0 license.
+
+ -- David Nichols <david@qore.org>  Tue, 29 Sep 2026 01:30:22 +0000

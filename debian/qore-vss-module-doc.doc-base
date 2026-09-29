@@ -1,0 +1,9 @@
+Document: qore-vss-module
+Title: Qore Vehicle Signal Specification Module Reference
+Author: Qore Technologies, s.r.o.
+Abstract: Vehicle catalog loading, validation, unit conversion and data providers.
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/qore-vss-module-doc/docs/VssLoader/html/index.html
+Files: /usr/share/doc/qore-vss-module-doc/docs/*/html/*.html

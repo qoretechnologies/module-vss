@@ -1,0 +1,5 @@
+usr/lib/*/qore-modules/VssLoader/
+usr/lib/*/qore-modules/VssDataProvider/
+usr/share/qore-modules/VssLoader/
+usr/share/qore-modules/VssDataProvider/
+usr/share/qore/i18n/

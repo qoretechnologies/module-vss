@@ -23,6 +23,8 @@ Requirements
 License
 -------
 This module is released under the MIT license; see COPYING.MIT for details.
+The derived COVESA test fixture test/data/vss_v6_subset.yaml is under MPL-2.0;
+see its attribution and COPYING.MPL-2.0.
 
 Building
 --------
