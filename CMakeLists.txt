@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.31)
 
 project(qore-vss-module)
 
@@ -7,6 +7,8 @@ set(VERSION_MINOR 0)
 set(VERSION_PATCH 0)
 set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
+# Resolve API links to bundled Qore modules from the installed SDK.
+set(QORE_DOXYGEN_MODULES DataProvider reflection json yaml)
 find_package(Qore 2.0 REQUIRED)
 
 set(QMOD
@@ -49,4 +51,12 @@ if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_SRC ${QORE_DOX_TMPL_SRC})
     add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
     add_dependencies(docs-module QORE_MOD_DOX_FILES)
+    # Build the overview and release notes after both API indexes are available.
+    configure_file(docs/Doxyfile.in "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.vss" @ONLY)
+    add_custom_target(docs-overview
+        COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.vss"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+        DEPENDS QORE_MOD_DOX_FILES docs-VssDataProvider
+        VERBATIM)
+    add_dependencies(docs docs-overview)
 endif()

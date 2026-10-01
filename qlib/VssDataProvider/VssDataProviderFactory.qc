@@ -66,7 +66,7 @@ public class VssDataProviderFactory inherits DataProvider::AbstractDataProviderF
     }
 
     #! Returns factory metadata describing the provider's name and capabilities
-    /** @return a @ref DataProviderFactoryInfo hash with factory name and description
+    /** @return a @ref DataProvider::DataProviderFactoryInfo hash with factory name and description
     */
     hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;
@@ -108,7 +108,7 @@ public class VssDataProviderFactory inherits DataProvider::AbstractDataProviderF
     }
 
     #! Returns the provider info hash for the root VSS provider
-    /** @return a @ref DataProviderInfo hash describing the provider's capabilities
+    /** @return a @ref DataProvider::DataProviderInfo hash describing the provider's capabilities
     */
     private hash<DataProvider::DataProviderInfo> getProviderInfoImpl() {
         return VssRootDataProvider::ProviderInfo;

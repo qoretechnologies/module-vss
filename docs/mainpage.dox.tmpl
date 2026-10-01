@@ -8,7 +8,7 @@
     <a href="https://covesa.github.io/vehicle_signal_specification/">COVESA Vehicle Signal Specification (VSS)</a>,
     the industry-standard data model for vehicle signals.
 
-    This module is released under the MIT license (see \ref COPYING.MIT "COPYING.MIT"
+    This module is released under the MIT license (see <a href="COPYING.MIT">COPYING.MIT</a>
     for details).
 
     To use this module, use \c "%requires VssLoader" in your code.
@@ -23,7 +23,7 @@
 
     @section vsscapabilities Capabilities
 
-    - Native \c .vspec file parsing with \c #include directive resolution
+    - Native \c .vspec file parsing with \#include directive resolution
     - Instance expansion (e.g. \c "Row[1,4]" to concrete paths)
     - Overlay merging (attribute override, path addition/deletion)
     - Pre-exported VSS JSON/YAML loading
@@ -80,8 +80,10 @@ float speed_ms = converter.convert(100.0, "km/h", "m/s");
     @section vssreleasenotes Release Notes
 
     @subsection vss_1_0 VssLoader 1.0
+    - SDK documentation links resolve bundled module APIs and parser directive text correctly
+    - the documentation build includes the overview, examples and release notes
     - initial release
-    - native \c .vspec file parsing with \c #include resolution
+    - native \c .vspec file parsing with \#include resolution
     - instance expansion and overlay merging
     - pre-exported VSS JSON/YAML loading
     - data validation (type, range, enum, unknown path)

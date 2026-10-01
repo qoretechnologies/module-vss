@@ -93,6 +93,7 @@ public class VssValidationDataProvider inherits DataProvider::AbstractDataProvid
 
     #! Handles validation request
     /** @param req hash with `path` (string) and `value` (auto) keys
+        @param request_options reserved provider request options
 
         @return hash with `valid` (bool) and `errors` (list) keys
     */

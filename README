@@ -47,7 +47,10 @@ Testing
 
 Documentation
 -------------
-See docs/ directory for Doxygen documentation.
+Run `cmake --build build --target docs` after configuring with Doxygen available.
+Open build/docs/vss/html/index.html for the overview and release notes, with links
+to both module API references. The Qore SDK's module documentation indexes provide
+links to DataProvider, reflection, JSON and YAML APIs without network access.
 
 Author
 ------

@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file VssVspecParser.qc Native .vspec file parser with #include support
+#! @file VssVspecParser.qc Native .vspec file parser with \#include support
 
 /*  Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -24,10 +24,10 @@
 
 public namespace VssLoader {
 
-#! Parses native .vspec files with #include directive support
-/** Reads COVESA VSS \c .vspec files (YAML with \c "#include" directives) and produces
+#! Parses native .vspec files with \#include directive support
+/** Reads COVESA VSS \c .vspec files (YAML with \#include directives) and produces
     a flat map of VSS paths to @ref VssNode definitions. Supports:
-    - Recursive \c "#include" resolution with circular include detection
+    - Recursive \#include resolution with circular include detection
     - Mount-point prefixing for included files
     - Path traversal protection (included files must stay under the base directory)
 
@@ -57,14 +57,14 @@ public class VssVspecParser {
     }
 
     #! Creates a parser with the given base directory
-    /** @param base_dir the base directory for resolving relative #include paths
+    /** @param base_dir the base directory for resolving relative \#include paths
     */
     constructor(string base_dir) {
         self.base_dir = base_dir;
         self.root_dir = normalize_dir(base_dir);
     }
 
-    #! Parses a .vspec file, resolving #include directives recursively
+    #! Parses a .vspec file, resolving \#include directives recursively
     /** @param filepath path to the .vspec file (absolute or relative to base_dir)
 
         @return a flat map of VSS path to VssNode
@@ -103,8 +103,8 @@ public class VssVspecParser {
     }
 
     #! Parses already-loaded vspec content
-    /** @param yaml_content the raw vspec file content (YAML with optional #include lines)
-        @param context_dir the directory context for resolving relative #include paths
+    /** @param yaml_content the raw vspec file content (YAML with optional \#include lines)
+        @param context_dir the directory context for resolving relative \#include paths
 
         @return a flat map of VSS path to VssNode
 
@@ -181,7 +181,7 @@ public class VssVspecParser {
         return result;
     }
 
-    #! Preprocesses content to extract #include directives
+    #! Preprocesses content to extract \#include directives
     /** @param content the raw file content
 
         @return a hash with "yaml_content" (string) and "includes" (list of {path, mount_point})

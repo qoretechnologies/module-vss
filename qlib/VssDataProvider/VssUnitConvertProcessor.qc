@@ -26,7 +26,7 @@ public namespace VssDataProvider {
 
 #! Applies unit conversions to specified fields in a record
 /** Converts numeric signal values between measurement units using a
-    @ref VssUnitConverter instance. Non-numeric values are silently skipped.
+    @ref VssLoader::VssUnitConverter instance. Non-numeric values are silently skipped.
 
     Common fleet use cases include converting between metric and imperial units
     for multi-region fleet dashboards, or normalizing OBD-II readings to VSS

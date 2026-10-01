@@ -30,7 +30,7 @@ public namespace VssDataProvider {
 
 #! SAX-based YAML record iterator for VSS data
 /** Parses YAML data from an InputStream using
-    @ref Qore::Yaml::YamlSaxParser "YamlSaxParser", supporting two formats:
+    @ref Qore::YAML::YamlSaxParser "YamlSaxParser", supporting two formats:
     - **Multi-document**: each YAML document (separated by \c "---") is one record mapping
     - **Sequence of mappings**: a single document with a top-level sequence of mapping records
 
