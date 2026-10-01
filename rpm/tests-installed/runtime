@@ -1,0 +1,25 @@
+#!/bin/sh
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+set -eu
+source_root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+test_root=$(mktemp -d)
+trap 'rm -rf "$test_root"' EXIT HUP INT TERM
+export LC_ALL=C.UTF-8
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR LD_LIBRARY_PATH LD_PRELOAD
+QORE_MODULE_DIR=$(/usr/bin/qore --module-path)
+export QORE_MODULE_DIR
+export QORE_MODULE_DIR_ONLY=1
+module_dir=$(printf '%s\n' "$QORE_MODULE_DIR" | tr : '\n' | while IFS= read -r path; do
+    if [ -f "$path/VssLoader/VssLoader.qmod" ]; then printf '%s\n' "$path"; break; fi
+done)
+test -n "$module_dir"
+/usr/bin/qore -b --enable-debug -l yaml -l json -e 'exit(0);'
+cp "$source_root"/test/*.qtest "$test_root/"
+cp -a "$source_root/test/data" "$test_root/"
+cd "$test_root"
+for test in ./*.qtest; do
+    timeout 180 /usr/bin/qore -b --enable-debug \
+        -l "$module_dir/VssLoader/VssLoader.qmod" \
+        -l "$module_dir/VssDataProvider/VssDataProvider.qmod" "$test" -v
+done
