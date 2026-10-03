@@ -47,16 +47,23 @@ qore_config_info()
 if (DOXYGEN_FOUND)
     set(QORE_DOX_TMPL_SRC
         docs/mainpage.dox.tmpl
+        docs/guide-vssexamples.dox.tmpl
+        docs/guide-vssreleasenotes.dox.tmpl
     )
     qore_wrap_dox(QORE_DOX_SRC ${QORE_DOX_TMPL_SRC})
     add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
     add_dependencies(docs-module QORE_MOD_DOX_FILES)
-    # Build the overview and release notes after both API indexes are available.
-    configure_file(docs/Doxyfile.in "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.vss" @ONLY)
+    set(VSS_DOX_INPUT "")
+    foreach(_source IN LISTS QORE_DOX_SRC)
+        string(APPEND VSS_DOX_INPUT " \"${_source}\"")
+    endforeach()
+    set(QORE_DOXYGEN_IMAGES "${CMAKE_SOURCE_DIR}/qlib/VssDataProvider/vss-logo.svg")
+    qore_configure_module_doxygen("${CMAKE_SOURCE_DIR}/docs/Doxyfile.in" "${CMAKE_BINARY_DIR}/Doxyfile")
     add_custom_target(docs-overview
-        COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.vss"
+        COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_BINARY_DIR}/Doxyfile"
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-        DEPENDS QORE_MOD_DOX_FILES docs-VssDataProvider
+        DEPENDS QORE_MOD_DOX_FILES
         VERBATIM)
-    add_dependencies(docs docs-overview)
+    add_dependencies(docs-module docs-overview)
+    qore_binary_module_two_phase_docs(vss "VssLoader;VssDataProvider")
 endif()

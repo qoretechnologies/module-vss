@@ -49,7 +49,7 @@ module VssLoader {
 
     The %VssLoader module provides core functionality for loading, parsing,
     and validating COVESA Vehicle Signal Specification (VSS) data. It is the
-    foundation for the <a href="../../VssDataProvider/html/index.html">VssDataProvider module</a> and can also be used
+    foundation for the @ref vssdataproviderintro "VssDataProvider module" and can also be used
     independently for fleet management, IoT telemetry validation, and
     vehicle data processing.
 

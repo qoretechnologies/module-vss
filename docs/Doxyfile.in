@@ -2,12 +2,10 @@
 # SPDX-License-Identifier: MIT
 PROJECT_NAME = "Qore VSS Module"
 PROJECT_NUMBER = "@PROJECT_VERSION@"
-INPUT = "@CMAKE_BINARY_DIR@/mainpage.dox"
+INPUT = @VSS_DOX_INPUT@
 OUTPUT_DIRECTORY = "@CMAKE_BINARY_DIR@/docs/vss"
 GENERATE_TAGFILE = "@CMAKE_BINARY_DIR@/vss.tag"
 GENERATE_LATEX = NO
 QUIET = YES
 WARN_AS_ERROR = YES
 HTML_EXTRA_FILES = "@CMAKE_SOURCE_DIR@/COPYING.MIT"
-TAGFILES = "@CMAKE_BINARY_DIR@/VssLoader.tag=../../VssLoader/html" \
-           "@CMAKE_BINARY_DIR@/VssDataProvider.tag=../../VssDataProvider/html"
