@@ -22,6 +22,7 @@ add_custom_target(docs-module)
 
 qore_user_modules("${QMOD}")
 
+set(QORE_DOXYGEN_IMAGES "${CMAKE_SOURCE_DIR}/qlib/VssDataProvider/vss-logo.svg")
 qore_external_user_module("qlib/VssLoader" "")
 qore_external_user_module("qlib/VssDataProvider" "VssLoader")
 
@@ -57,7 +58,6 @@ if (DOXYGEN_FOUND)
     foreach(_source IN LISTS QORE_DOX_SRC)
         string(APPEND VSS_DOX_INPUT " \"${_source}\"")
     endforeach()
-    set(QORE_DOXYGEN_IMAGES "${CMAKE_SOURCE_DIR}/qlib/VssDataProvider/vss-logo.svg")
     qore_configure_module_doxygen("${CMAKE_SOURCE_DIR}/docs/Doxyfile.in" "${CMAKE_BINARY_DIR}/Doxyfile")
     add_custom_target(docs-overview
         COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_BINARY_DIR}/Doxyfile"

@@ -4,6 +4,8 @@
 
     @section vssintro Introduction to the VSS Module
 
+    <img src="vss-logo.svg" width="96" alt="vss module logo"/>
+
     The %VssLoader module provides support for the
     <a href="https://covesa.github.io/vehicle_signal_specification/">COVESA Vehicle Signal Specification (VSS)</a>,
     the industry-standard data model for vehicle signals.
@@ -19,7 +21,12 @@
 
     The following user modules are provided with this module:
     - @ref vssloaderintro "VssLoader": Core VSS loading, parsing, and validation functionality
-    - <img src="vss-logo.svg" width="28" height="28" alt="VssDataProvider app icon"/> @ref vssdataproviderintro "VssDataProvider": DataProvider integration for browsable VSS catalog and pipeline data processors for telemetry normalization, validation, unit conversion, and enrichment
+    - @ref vssdataproviderintro "VssDataProvider": DataProvider integration for browsable VSS catalog and pipeline data processors for telemetry normalization, validation, unit conversion, and enrichment
+
+    @section vssdocumentation Documentation
+
+    - @anchor vssexamples @subpage vssexamplesguide
+    - @anchor vssreleasenotes @subpage vssreleasenotesguide
 
     @section vsscapabilities Capabilities
 
@@ -31,16 +38,5 @@
     - Extensible unit conversion (factor/offset model)
     - DataProvider browsable tree navigation
     - Pipeline processors: normalize, validate, convert, enrich
-
-    @section vssexamples Examples
-
-    @subpage vssexamplesguide
-
-
-    @section vssreleasenotes Release Notes
-
-    @subpage vssreleasenotesguide
-
-
 
 */

@@ -87,6 +87,8 @@ module VssDataProvider {
 
     @section vssdataproviderintro Introduction
 
+    <img src="vss-logo.svg" width="96" alt="VssDataProvider module logo"/>
+
     The %VssDataProvider module provides DataProvider integration for COVESA VSS
     catalogs, enabling browsable tree navigation, data validation, telemetry
     ingestion, and pipeline processing through Qore's data provider framework.
