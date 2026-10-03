@@ -51,6 +51,9 @@ Run `cmake --build build --target docs` after configuring with Doxygen available
 Open build/docs/vss/html/index.html for the overview and release notes, with links
 to both module API references. The Qore SDK's module documentation indexes provide
 links to DataProvider, reflection, JSON and YAML APIs without network access.
+The overview and API pages share the SDK's Qore theme, header, and favicon.
+After building, run `python3 test/test_docs.py build/docs -v` to check the rendered
+theme assets, license, and cross-module links.
 
 Author
 ------

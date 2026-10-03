@@ -54,11 +54,20 @@ if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_SRC ${QORE_DOX_TMPL_SRC})
     add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
     add_dependencies(docs-module QORE_MOD_DOX_FILES)
-    set(VSS_DOX_INPUT "")
+    # Use the same SDK template and assets as the companion-module API pages.
+    # The local wrapper adds the overview title and license without replacing
+    # the shared stylesheet, header, favicon, or cross-reference indexes.
+    set(module_name vss)
+    set(CURRENT_MODULE_NAME vss)
+    set(_dox_output "${CMAKE_BINARY_DIR}/docs/vss")
+    set(_dox_input "")
     foreach(_source IN LISTS QORE_DOX_SRC)
-        string(APPEND VSS_DOX_INPUT " \"${_source}\"")
+        string(APPEND _dox_input " \"${_source}\"")
     endforeach()
-    qore_configure_module_doxygen("${CMAKE_SOURCE_DIR}/docs/Doxyfile.in" "${CMAKE_BINARY_DIR}/Doxyfile")
+    set(TAGFILES "")
+    qore_configure_module_doxygen("${QORE_USERMODULE_DOXYGEN_TEMPLATE}"
+        "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.vss")
+    configure_file("${CMAKE_SOURCE_DIR}/docs/Doxyfile.in" "${CMAKE_BINARY_DIR}/Doxyfile" @ONLY)
     add_custom_target(docs-overview
         COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_BINARY_DIR}/Doxyfile"
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"

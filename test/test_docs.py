@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
-"""Check generated overview, dependency links and literal VSS directive text."""
+"""Check the shared documentation theme, assets, links, and VSS directive text."""
 from html.parser import HTMLParser
 from pathlib import Path
 import sys
@@ -15,6 +15,9 @@ class Page(HTMLParser):
     def __init__(self, path):
         super().__init__()
         self.links = []
+        self.stylesheets = []
+        self.icons = []
+        self.assets = []
         self.ids = set()
         self.text = []
         self.feed(path.read_text())
@@ -23,6 +26,16 @@ class Page(HTMLParser):
         attrs = dict(attrs)
         if tag == 'a' and 'href' in attrs:
             self.links.append(attrs['href'])
+        if tag == 'link' and 'href' in attrs:
+            rel = attrs.get('rel', '').split()
+            if 'stylesheet' in rel:
+                self.stylesheets.append(attrs['href'])
+            if 'icon' in rel:
+                self.icons.append(attrs['href'])
+            if 'stylesheet' in rel or 'icon' in rel:
+                self.assets.append(attrs['href'])
+        if tag in ('img', 'script') and 'src' in attrs:
+            self.assets.append(attrs['src'])
         if 'id' in attrs:
             self.ids.add(attrs['id'])
 
@@ -31,6 +44,26 @@ class Page(HTMLParser):
 
 
 class DocsTest(unittest.TestCase):
+    def test_shared_theme_and_assets_on_overview_guides_and_api_pages(self):
+        reference = DOCS / 'VssLoader/html'
+        for module in ('vss', 'VssLoader', 'VssDataProvider'):
+            directory = DOCS / module / 'html'
+            pages = [path for path in directory.glob('*.html') if path.name != 'doxygen_crawl.html']
+            self.assertTrue(pages, module)
+            for path in pages:
+                with self.subTest(page=path):
+                    page = Page(path)
+                    self.assertIn('dox_qore.css', page.stylesheets)
+                    self.assertIn('Qore-Q.ico', page.icons)
+                    self.assertIn('qore-logo-55x151-white.png', page.assets)
+                    for asset in page.assets:
+                        url = urlsplit(asset)
+                        if not url.scheme and not url.netloc:
+                            self.assertTrue((directory / unquote(url.path)).is_file(), asset)
+            for asset in ('dox_qore.css', 'Qore-Q.ico', 'qore-logo-55x151-white.png'):
+                self.assertEqual((reference / asset).read_bytes(), (directory / asset).read_bytes(),
+                                 f'{module}: {asset}')
+
     def test_overview_release_notes_and_local_links(self):
         path = DOCS / 'vss/html/index.html'
         page = Page(path)
