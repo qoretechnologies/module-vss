@@ -92,10 +92,10 @@ public class VssValidationDataProvider inherits DataProvider::AbstractDataProvid
     }
 
     #! Handles validation request
-    /** @param req hash with `path` (string) and `value` (auto) keys
+    /** @param req hash with <tt>path</tt> (string) and <tt>value</tt> (auto) keys
         @param request_options reserved provider request options
 
-        @return hash with `valid` (bool) and `errors` (list) keys
+        @return hash with <tt>valid</tt> (bool) and <tt>errors</tt> (list) keys
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         if (req.typeCode() != NT_HASH) {

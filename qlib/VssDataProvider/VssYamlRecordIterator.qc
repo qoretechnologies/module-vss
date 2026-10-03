@@ -31,8 +31,8 @@ public namespace VssDataProvider {
 #! SAX-based YAML record iterator for VSS data
 /** Parses YAML data from an InputStream using
     @ref Qore::YAML::YamlSaxParser "YamlSaxParser", supporting two formats:
-    - **Multi-document**: each YAML document (separated by \c "---") is one record mapping
-    - **Sequence of mappings**: a single document with a top-level sequence of mapping records
+    - <b>Multi-document</b>: each YAML document (separated by \c "---") is one record mapping
+    - <b>Sequence of mappings</b>: a single document with a top-level sequence of mapping records
 
     Records are reconstructed via a stack-based state machine during SAX parsing,
     avoiding construction of a full DOM tree. All records are collected in memory

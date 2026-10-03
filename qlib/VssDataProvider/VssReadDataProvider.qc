@@ -145,7 +145,7 @@ public class VssReadDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the data provider from a hash of options
-    /** @param options option hash with `path`, `stream`, or `data` and optional `format`
+    /** @param options option hash with <tt>path</tt>, <tt>stream</tt>, or <tt>data</tt> and optional <tt>format</tt>
 
         @throw VSS-READ-ERROR missing or conflicting input options
         @throw VSS-FORMAT-ERROR unknown or missing format

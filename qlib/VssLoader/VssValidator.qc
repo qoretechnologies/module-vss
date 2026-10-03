@@ -29,10 +29,10 @@ public namespace VssLoader {
     against the VSS signal definitions in a @ref VssTree.
 
     Validation checks:
-    - **Type**: Qore type matches the expected VSS datatype mapping
-    - **Range**: Numeric value within intrinsic type range and node-specific min/max
-    - **Array elements**: Individual elements in array-typed values match expected type
-    - **Enum**: Value is in the allowed values list (if defined)
+    - <b>Type</b>: Qore type matches the expected VSS datatype mapping
+    - <b>Range</b>: Numeric value within intrinsic type range and node-specific min/max
+    - <b>Array elements</b>: Individual elements in array-typed values match expected type
+    - <b>Enum</b>: Value is in the allowed values list (if defined)
 
     @par Fleet Telemetry Validation Example
     @code{.py}
