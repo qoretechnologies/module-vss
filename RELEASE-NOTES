@@ -1,1 +1,2 @@
-See release notes in the Doxygen documentation: docs/vss/html/index.html#vssreleasenotes
+See the vss module release notes in the generated Doxygen documentation.
+The authoritative source is docs/guide-vssreleasenotes.dox.tmpl.
