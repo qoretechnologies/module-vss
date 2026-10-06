@@ -28,3 +28,7 @@ The documentation package includes HTML references, tests and sample data.
 The module uses MIT; the bundled COVESA test catalog uses MPL-2.0 and its license
 is included in the documentation package. --without docs and --without tests
 are available for diagnosis; repository qualification uses both defaults.
+
+Installed documentation scripts use ``/usr/bin/qore`` so their interpreter
+resolves to the packaged runtime. Source-checkout scripts retain their portable
+``/usr/bin/env qore`` shebangs.

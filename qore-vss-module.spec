@@ -82,6 +82,9 @@ install -d %{buildroot}%{_docdir}/%{name}-doc
 cp -a build/docs test %{buildroot}%{_docdir}/%{name}-doc/
 install -d %{buildroot}%{_licensedir}/%{name}-doc
 install -m644 COPYING.MIT COPYING.MPL-2.0 %{buildroot}%{_licensedir}/%{name}-doc/
+# Installed examples use the packaged interpreter, independent of PATH.
+sed -i '1s|^#!/usr/bin/env qore$|#!/usr/bin/qore|' \
+  %{buildroot}%{_docdir}/%{name}-doc/test/*.qtest
 hardlink -t -O %{buildroot}%{_docdir}/%{name}-doc %{buildroot}%{_licensedir}/%{name}-doc
 %endif
 %check
@@ -113,5 +116,8 @@ python3 -B -W error test/test_docs.py build/docs
 %doc %{_docdir}/%{name}-doc/
 %endif
 %changelog
+* Tue Oct 06 2026 David Nichols <david@qore.org> - 1.0.0-1
+- Use the packaged Qore interpreter in installed documentation examples.
+
 * Thu Oct 01 2026 David Nichols <david@qore.org> - 1.0.0-1
 - Package compiled modules, sources, catalogs, documentation and offline tests.
