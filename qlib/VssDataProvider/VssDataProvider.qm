@@ -88,7 +88,7 @@ module VssDataProvider {
 
 /** @mainpage VssDataProvider Module
 
-    @section vssdataproviderintro Introduction
+    @section vssdataproviderintro VssDataProvider Module Introduction
 
     <img src="vss-logo.svg" width="96" alt="VssDataProvider module logo"/>
 
@@ -170,6 +170,14 @@ module VssDataProvider {
       Validation request fields (path + value)
     - @ref VssDataProvider::VssValidationResponseDataType "VssValidationResponseDataType" -
       Validation response fields (valid + errors)
+
+    @subpage vssdataproviderreleasenotes
+*/
+
+/** @page vssdataproviderreleasenotes VssDataProvider Release Notes
+
+    @section vssdataproviderv10 VssDataProvider Module Version 1.0
+    - initial release
 */
 
 public namespace VssDataProvider {

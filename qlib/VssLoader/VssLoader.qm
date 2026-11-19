@@ -45,7 +45,7 @@ module VssLoader {
 
 /** @mainpage VssLoader Module
 
-    @section vssloaderintro Introduction
+    @section vssloaderintro VssLoader Module Introduction
 
     The %VssLoader module provides core functionality for loading, parsing,
     and validating COVESA Vehicle Signal Specification (VSS) data. It is the
@@ -99,6 +99,14 @@ module VssLoader {
     - @ref VssLoader::VssNode "VssNode" - Signal/branch node metadata
     - @ref VssLoader::VssValidationError "VssValidationError" - Validation error details
     - @ref VssLoader::VssUnitConversion "VssUnitConversion" - Unit conversion specification
+
+    @subpage vssloaderreleasenotes
+*/
+
+/** @page vssloaderreleasenotes VssLoader Release Notes
+
+    @section vssloaderv10 VssLoader Module Version 1.0
+    - initial release
 */
 
 public namespace VssLoader {
