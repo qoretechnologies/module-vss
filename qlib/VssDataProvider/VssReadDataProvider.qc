@@ -130,7 +130,9 @@ public class VssReadDataProvider inherits DataProvider::AbstractDataProvider {
         };
     }
 
-    private {
+    # the source is not visible to subclasses: a subclass of the restricted code that a host-created provider was lent
+    # to could otherwise set the path that the provider reads with the file system lent (issue #4)
+    private:internal {
         #! The input source name for display
         string input_name;
 

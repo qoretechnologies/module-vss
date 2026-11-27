@@ -213,7 +213,8 @@ public class VssUnitConverter {
 
         @throw VSS-UNIT-CONFIG-ERROR thrown when the config file is invalid
     */
-    private loadConfig(string config_path) {
+    # not visible to subclasses: the path is checked in the constructor (issue #4)
+    private:internal loadConfig(string config_path) {
 %ifdef NoYaml
         throw "YAML-MODULE-MISSING", "cannot load unit config; the yaml module is not available";
 %else

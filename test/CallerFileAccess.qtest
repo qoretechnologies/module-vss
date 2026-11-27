@@ -31,6 +31,10 @@
 %define NoYaml
 %endtry
 
+%try-module json
+%define NoJson
+%endtry
+
 %prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires DataProvider
@@ -114,6 +118,11 @@ string sub lent_parse_content(VssVspecParser p, string content, string dir) {
     return run(sub () { if (!p.parseContent(content, dir)) throw \"EMPTY\"; });
 }
 
+# reads the records of a reader that the host created
+string sub lent_read(VssReadDataProvider r) {
+    return run(sub () { if (!r.searchRecords().next()) throw \"EMPTY\"; });
+}
+
 # uses objects made from data
 string sub from_data(string content, string dir) {
     return run(sub () {
@@ -127,6 +136,20 @@ string sub from_data(string content, string dir) {
     });
 }
 ";
+
+        #! subclasses that would reach the file-system state of the module's classes
+        const SubclassSources = {
+            "VssUnitConverter::loadConfig()": "%modern
+%requires VssLoader
+class Sub inherits VssUnitConverter { constructor(string p) { loadConfig(p); } }
+",
+            "VssReadDataProvider::stored_path": "%modern
+%requires VssDataProvider
+class Sub inherits VssReadDataProvider {
+    static set(VssReadDataProvider r, string p) { r.stored_path = p; }
+}
+",
+        };
 
         #! a vspec file without includes
         const Content = "Vehicle:\n  type: branch\n  description: test\n";
@@ -146,6 +169,7 @@ string sub from_data(string content, string dir) {
             addTestCase("lent objects, " + m, sub () { testLent(m); });
             addTestCase("objects from data, " + m, sub () { testFromData(m); });
         }
+        addTestCase("subclasses", \testSubclasses());
 %endif
         set_return_value(main());
     }
@@ -154,7 +178,9 @@ string sub from_data(string content, string dir) {
     private list<list<auto>> getPathCalls() {
         return (
             ("tree", "VssTree yaml", (dir + "/vss_v6_subset.yaml",)),
+%ifndef NoJson
             ("tree", "VssTree json", (dir + "/vss_v6_subset.json",)),
+%endif
             ("tree", "VssTree vspec", (dir + "/basic.vspec",)),
             ("converter", "VssUnitConverter", (dir + "/custom_units.yaml",)),
             ("parse_file", "VssVspecParser::parseFile()", (dir, "basic.vspec")),
@@ -199,9 +225,20 @@ string sub from_data(string content, string dir) {
                 "basic.vspec"), "parseFile " + desc);
             assertEq(exp, getProgram(kind, mode).callFunction("lent_parse_content", new VssVspecParser(dir),
                 "#include basic.vspec\n" + Content, dir), "parseContent " + desc);
+            # the path of a reader that the host created is the host's
+            assertEq(kind == "sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok", getProgram(kind, mode).callFunction(
+                "lent_read", new VssReadDataProvider({"path": dir + "/vss_telemetry.json"})), "reader " + desc);
             # content without includes is not a path
             assertEq("ok", getProgram(kind, mode).callFunction("lent_parse_content", new VssVspecParser(dir),
                 Content, dir), "parseContent without includes " + desc);
+        }
+    }
+
+    #! restricted code cannot reach the file-system state of the module's classes through a subclass
+    private testSubclasses() {
+        foreach hash<auto> i in (SubclassSources.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (i.value, "sub"), i.key);
         }
     }
 
