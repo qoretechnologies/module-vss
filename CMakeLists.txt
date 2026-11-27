@@ -9,7 +9,7 @@ set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 # Resolve API links to bundled Qore modules from the installed SDK.
 set(QORE_DOXYGEN_MODULES DataProvider reflection json yaml)
-find_package(Qore 2.0 REQUIRED)
+find_package(Qore 3.0 REQUIRED)
 
 set(QMOD
     qlib/VssLoader
