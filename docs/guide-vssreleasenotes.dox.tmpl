@@ -6,4 +6,7 @@
 
     @section vss_1_0 VSS Modules Version 1.0
     - initial release
+    - the file-system paths that the calling code gives (the \c catalog_path option and the paths given to the
+      %VssLoader classes) are refused with \c PERMISSION-DENIED before they are used if the calling code is
+      restricted from the file system (<a href="https://github.com/qoretechnologies/module-vss/issues/4">issue 4</a>)
 */

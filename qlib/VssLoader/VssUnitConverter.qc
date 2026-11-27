@@ -91,8 +91,12 @@ public class VssUnitConverter {
     /** @param config_path path to the YAML config file
 
         @throw VSS-UNIT-CONFIG-ERROR thrown when the config file is invalid
+        @throw PERMISSION-DENIED the creating code is restricted from the \c FILESYSTEM functional domain (see
+        @ref vssloader_caller_paths)
     */
     constructor(string config_path) {
+        # the path is the creating code's input: refused before anything is read if that code is restricted (issue #4)
+        vss_check_caller_path("unit config file path", config_path, False);
         conversions = {};
         registerBuiltinConversions();
         loadConfig(config_path);

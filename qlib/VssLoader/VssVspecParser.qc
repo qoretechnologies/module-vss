@@ -71,8 +71,14 @@ public class VssVspecParser {
 
         @throw VSS-CIRCULAR-INCLUDE thrown when a circular include is detected
         @throw VSS-PARSE-ERROR thrown when the file cannot be parsed
+        @throw PERMISSION-DENIED the calling code, or the code that a host-created parser was lent to, is restricted
+        from the \c FILESYSTEM functional domain (see @ref vssloader_caller_paths)
     */
     hash<string, hash<VssNode>> parseFile(string filepath) {
+        # the path, and the include directives of the content that the caller gives parseContent(), are the caller's
+        # input, also for the code that a host-created parser was lent to: refused before anything is read if that
+        # code is restricted (issue #4)
+        vss_check_caller_path("vspec file path", filepath, True);
         # resolve to absolute path
         string abs_path;
         if (filepath =~ /^\//) {
@@ -109,6 +115,9 @@ public class VssVspecParser {
         @return a flat map of VSS path to VssNode
 
         @throw VSS-PARSE-ERROR thrown when the content cannot be parsed
+        @throw PERMISSION-DENIED the content has \c \#include directives and the calling code, or the code that a
+        host-created parser was lent to, is restricted from the \c FILESYSTEM functional domain (see
+        @ref vssloader_caller_paths)
     */
     hash<string, hash<VssNode>> parseContent(string yaml_content, string context_dir) {
         # preprocess: separate #include directives from YAML content

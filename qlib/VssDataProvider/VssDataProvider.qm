@@ -171,6 +171,26 @@ module VssDataProvider {
     - @ref VssDataProvider::VssValidationResponseDataType "VssValidationResponseDataType" -
       Validation response fields (valid + errors)
 
+    @section vssdp_caller_paths Paths Given by Restricted Callers
+
+    The code of this module runs with its own %Program's options, so it decides with the restrictions of the code that
+    calls it before it reads a file whose path that code gives: if that code is restricted from the \c FILESYSTEM
+    functional domain (for example with \c PO_NO_FILESYSTEM), the provider is not created and the call is refused with
+    \c PERMISSION-DENIED before anything is read.  The file-system policy of a sandbox that governs the calling code
+    applies when a file is opened (\c FILESYSTEM-ACCESS-DENIED).  The checked paths are:
+    - the \c catalog_path option of @ref VssDataProvider::VssRootDataProvider "VssRootDataProvider", also when the
+      provider is created with a @ref VssDataProvider::VssDataProviderFactory "VssDataProviderFactory" that the host
+      created and gave to the restricted code (the code that the factory was lent to is judged, see
+      @ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()")
+    - the paths that the classes of the @ref vssloader_caller_paths "VssLoader" module are given
+
+    The \c path option of @ref VssDataProvider::VssReadDataProvider "VssReadDataProvider" is a location that
+    @ref FileLocationHandler::FileLocationHandler "FileLocationHandler" reads when records are searched; it refuses a
+    caller restricted from a functional domain of the location's handler (\c FILESYSTEM for \c file:// locations
+    and paths), including the code of a provider that restricted code created.  Providers created from data
+    (the \c stream and \c data options of @ref VssDataProvider::VssReadDataProvider "VssReadDataProvider") work for
+    restricted callers.
+
     @subpage vssdataproviderreleasenotes
 */
 
@@ -178,6 +198,9 @@ module VssDataProvider {
 
     @section vssdataproviderv10 VssDataProvider Module Version 1.0
     - initial release
+    - the \c catalog_path option is refused with \c PERMISSION-DENIED before it is used if the calling code is
+      restricted from the file system, also when the host created the factory and gave it to that code (see
+      @ref vssdp_caller_paths, <a href="https://github.com/qoretechnologies/module-vss/issues/4">issue 4</a>)
 */
 
 public namespace VssDataProvider {
@@ -186,4 +209,28 @@ public namespace VssDataProvider {
 
     #! VSS app logo (SVG)
     public const VssLogo = File::readTextFile(get_script_dir() + "/vss-logo.svg");
+
+    #! Refuses a file-system path given by the calling code if that code is restricted from the file system
+    /** Library code runs with its own %Program's options, so a path that the calling code gives is refused before it
+        is used if that code is restricted from the \c FILESYSTEM functional domain (for example with
+        \c PO_NO_FILESYSTEM); see @ref vssdp_caller_paths.
+
+        @param field the name of the option, for the error message
+        @param path the path; no check is made if it is not set (any value that is set is checked, also an empty
+        string and one that evaluates to @ref False, such as \c "0")
+        @param lent @ref True if the path is an argument of a method of an existing object, which a host can lend to
+        restricted code (the borrower is judged, see @ref Qore::SandboxManager::isLentToRestricted()
+        "SandboxManager::isLentToRestricted()"), @ref False if it is given when an object is created (the creating
+        code is judged, see @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()")
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain
+    */
+    sub vss_dp_check_caller_path(string field, auto path, bool lent) {
+        if (exists path && (lent
+                ? SandboxManager::isLentToRestricted(DOM_FILESYSTEM)
+                : SandboxManager::isCallerRestricted(DOM_FILESYSTEM))) {
+            throw "PERMISSION-DENIED", sprintf("the %y option cannot be used: the calling code is restricted from the "
+                "FILESYSTEM functional domain", field);
+        }
+    }
 }
