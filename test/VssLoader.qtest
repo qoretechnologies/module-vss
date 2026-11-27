@@ -44,6 +44,7 @@ class VssLoaderTest inherits QUnit::Test {
         addTestCase("parse with includes", \testParseWithIncludes());
         addTestCase("circular include detection", \testCircularIncludeDetection());
         addTestCase("malformed yaml", \testMalformedYaml());
+        addTestCase("content with an include", \testContentWithInclude());
         addTestCase("unknown node type", \testUnknownNodeType());
         addTestCase("missing type field", \testMissingTypeField());
         addTestCase("path traversal prevention", \testPathTraversalPrevention());
@@ -181,6 +182,15 @@ class VssLoaderTest inherits QUnit::Test {
         assertThrows("VSS-CIRCULAR-INCLUDE", sub () {
             parser.parseFile("self.vspec");
         });
+    }
+
+    testContentWithInclude() {
+        # the include directives of content given to a new parser are resolved
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseContent("#include basic.vspec Vehicle.Extra\n"
+            "Vehicle.Extra:\n  type: branch\n  description: test\n", test_data_dir);
+        assertEq("branch", nodes."Vehicle.Extra".type);
+        assertEq("sensor", nodes."Vehicle.Extra.Vehicle.Speed".type);
     }
 
     testMalformedYaml() {

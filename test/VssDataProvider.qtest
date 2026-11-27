@@ -27,6 +27,7 @@ class VssDataProviderTest inherits QUnit::Test {
         # Factory tests
         addTestCase("factory registration", \testFactoryRegistration());
         addTestCase("factory info", \testFactoryInfo());
+        addTestCase("factory create", \testFactoryCreate());
 
         # Root provider tests
         addTestCase("root provider creation", \testRootProviderCreation());
@@ -69,6 +70,16 @@ class VssDataProviderTest inherits QUnit::Test {
     testFactoryRegistration() {
         auto factory = DataProvider::getFactory("vss");
         assertTrue(exists factory);
+    }
+
+    testFactoryCreate() {
+        # the factory creates the root provider from its option hash, as documented
+        AbstractDataProviderFactory factory = DataProvider::getFactory("vss");
+        AbstractDataProvider root = factory.create({"catalog_path": test_data_dir + "/vss_v6_subset.yaml"});
+        assertEq("VssRootDataProvider", root.className());
+        assertEq(("catalog", "validate"), root.getChildProviderNames());
+        assertThrows("VSS-PROVIDER-ERROR", "catalog_path", \factory.create(), {});
+        assertThrows("VSS-PROVIDER-ERROR", "catalog_path", \factory.create());
     }
 
     testFactoryInfo() {

@@ -101,7 +101,7 @@ public class VssRootDataProvider inherits DataProvider::AbstractDataProvider {
 
         @throw VSS-PROVIDER-ERROR if catalog_path is not provided
     */
-    constructor(hash<auto> options) {
+    constructor(*hash<auto> options) {
         if (!exists options.catalog_path) {
             throw "VSS-PROVIDER-ERROR", "option 'catalog_path' is required";
         }

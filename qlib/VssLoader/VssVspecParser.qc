@@ -53,7 +53,7 @@ public class VssVspecParser {
         string root_dir;
 
         #! Set of already loaded files for circular include detection
-        hash<string, bool> loaded_files;
+        hash<string, bool> loaded_files = {};
     }
 
     #! Creates a parser with the given base directory
