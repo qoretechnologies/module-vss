@@ -68,8 +68,12 @@ public class VssTree {
     /** @param filepath path to the file (.json, .yaml, .yml, or .vspec)
 
         @throw VSS-LOAD-ERROR thrown when the file format is unsupported or parsing fails
+        @throw PERMISSION-DENIED the creating code is restricted from the \c FILESYSTEM functional domain (see
+        @ref vssloader_caller_paths)
     */
     constructor(string filepath) {
+        # the path is the creating code's input: refused before anything is read if that code is restricted (issue #4)
+        vss_check_caller_path("catalog file path", filepath, False);
         auto parsed;
         if (filepath =~ /\.json$/i) {
 %ifdef NoJson

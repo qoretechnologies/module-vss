@@ -3,6 +3,7 @@
 %modern
 
 %requires QUnit
+%requires Util
 
 %try-module yaml
 %define NoYaml
@@ -43,7 +44,11 @@ class VssLoaderTest inherits QUnit::Test {
         addTestCase("parse basic vspec", \testParseBasicVspec());
         addTestCase("parse with includes", \testParseWithIncludes());
         addTestCase("circular include detection", \testCircularIncludeDetection());
+        addTestCase("a parser parses a file again", \testParseAgain());
+        addTestCase("a file that two files include is not circular", \testDiamondInclude());
+        addTestCase("an indirect circular include is detected", \testIndirectCircularInclude());
         addTestCase("malformed yaml", \testMalformedYaml());
+        addTestCase("content with an include", \testContentWithInclude());
         addTestCase("unknown node type", \testUnknownNodeType());
         addTestCase("missing type field", \testMissingTypeField());
         addTestCase("path traversal prevention", \testPathTraversalPrevention());
@@ -162,6 +167,61 @@ class VssLoaderTest inherits QUnit::Test {
         assertTrue(exists nodes."Vehicle.Powertrain.Powertrain.FuelLevel");
     }
 
+    #! writes the given files to a new temporary directory and returns it
+    private string writeVspecFiles(hash<string, string> files) {
+        string tmp_dir = tmp_location() + "/vss-include-test-" + get_random_string(8);
+        mkdir(tmp_dir, 0755);
+        foreach hash<auto> i in (files.pairIterator()) {
+            File f();
+            f.open2(tmp_dir + "/" + i.key, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(i.value);
+        }
+        return tmp_dir;
+    }
+
+    #! removes the directory that writeVspecFiles() wrote
+    private removeVspecFiles(string tmp_dir, hash<string, string> files) {
+        map unlink(tmp_dir + "/" + $1), keys files;
+        rmdir(tmp_dir);
+    }
+
+    testParseAgain() {
+        VssVspecParser parser(test_data_dir + "/with_includes");
+        hash<string, hash<VssNode>> first = parser.parseFile("main.vspec");
+        assertEq(first, parser.parseFile("main.vspec"));
+        # the include directives of content given again are resolved again
+        string content = "#include basic.vspec Vehicle.Extra\n";
+        parser = new VssVspecParser(test_data_dir);
+        first = parser.parseContent(content, test_data_dir);
+        assertEq(first, parser.parseContent(content, test_data_dir));
+    }
+
+    testDiamondInclude() {
+        hash<string, string> files = {
+            "main.vspec": "#include a.vspec A\n#include b.vspec B\nRoot:\n  type: branch\n  description: test\n",
+            "a.vspec": "#include common.vspec\n",
+            "b.vspec": "#include common.vspec\n",
+            "common.vspec": "Common:\n  type: branch\n  description: test\n",
+        };
+        string tmp_dir = writeVspecFiles(files);
+        on_exit removeVspecFiles(tmp_dir, files);
+        VssVspecParser parser(tmp_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseFile("main.vspec");
+        assertEq("branch", nodes."A.Common".type);
+        assertEq("branch", nodes."B.Common".type);
+    }
+
+    testIndirectCircularInclude() {
+        hash<string, string> files = {
+            "a.vspec": "#include b.vspec\nA:\n  type: branch\n  description: test\n",
+            "b.vspec": "#include a.vspec\nB:\n  type: branch\n  description: test\n",
+        };
+        string tmp_dir = writeVspecFiles(files);
+        on_exit removeVspecFiles(tmp_dir, files);
+        VssVspecParser parser(tmp_dir);
+        assertThrows("VSS-CIRCULAR-INCLUDE", \parser.parseFile(), "a.vspec");
+    }
+
     testCircularIncludeDetection() {
         # create a temp vspec that includes itself
         string tmp_dir = "/tmp" + "/vss_circ_test";
@@ -181,6 +241,15 @@ class VssLoaderTest inherits QUnit::Test {
         assertThrows("VSS-CIRCULAR-INCLUDE", sub () {
             parser.parseFile("self.vspec");
         });
+    }
+
+    testContentWithInclude() {
+        # the include directives of content given to a new parser are resolved
+        VssVspecParser parser(test_data_dir);
+        hash<string, hash<VssNode>> nodes = parser.parseContent("#include basic.vspec Vehicle.Extra\n"
+            "Vehicle.Extra:\n  type: branch\n  description: test\n", test_data_dir);
+        assertEq("branch", nodes."Vehicle.Extra".type);
+        assertEq("sensor", nodes."Vehicle.Extra.Vehicle.Speed".type);
     }
 
     testMalformedYaml() {

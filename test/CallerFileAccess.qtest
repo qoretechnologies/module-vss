@@ -1,0 +1,274 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    VSS caller file access test
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires QUnit
+%requires DataProvider
+%requires VssLoader
+%requires VssDataProvider
+
+%exec-class CallerFileAccessTest
+
+#! Tests that the paths that restricted callers give the VSS modules are refused before they are used (module-vss#4)
+/** Library code runs with its own Program's options, so a path that the calling code gives is refused if that code is
+    restricted from the file system: a Program with PO_NO_FILESYSTEM is refused with PERMISSION-DENIED, also through a
+    host-created factory or parser lent to it, and a Program whose sandbox denies the file system by default with
+    FILESYSTEM-ACCESS-DENIED (its file-system policy, when the file is opened).  Objects made from data still work for
+    restricted callers, and unrestricted callers use the paths.
+*/
+class CallerFileAccessTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        const Source = "%modern
+%requires DataProvider
+%requires VssLoader
+%requires VssDataProvider
+
+# runs the given use and returns \"ok\" or the error
+string sub run(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub tree(string path) {
+    return run(sub () { VssTree t(path); if (!t.size()) throw \"EMPTY\"; });
+}
+
+string sub converter(string path) {
+    return run(sub () { VssUnitConverter c(path); });
+}
+
+string sub parse_file(string dir, string file) {
+    return run(sub () { VssVspecParser p(dir); if (!p.parseFile(file)) throw \"EMPTY\"; });
+}
+
+string sub parse_content(string dir, string content) {
+    return run(sub () { VssVspecParser p(dir); if (!p.parseContent(content, dir)) throw \"EMPTY\"; });
+}
+
+string sub root(hash<auto> opts) {
+    return run(sub () { VssRootDataProvider r(opts); });
+}
+
+string sub factory(hash<auto> opts) {
+    return run(sub () {
+        AbstractDataProviderFactory f = DataProvider::getFactory(\"vss\");
+        f.create(opts);
+    });
+}
+
+string sub read(string path) {
+    return run(sub () {
+        VssReadDataProvider r({\"path\": path});
+        AbstractDataProviderRecordIterator i = r.searchRecords();
+        if (!i.next()) throw \"EMPTY\";
+    });
+}
+
+# uses a factory that the host created
+string sub lent_factory(AbstractDataProviderFactory f, hash<auto> opts) {
+    return run(sub () { f.create(opts); });
+}
+
+# uses a parser that the host created
+string sub lent_parse_file(VssVspecParser p, string file) {
+    return run(sub () { if (!p.parseFile(file)) throw \"EMPTY\"; });
+}
+
+string sub lent_parse_content(VssVspecParser p, string content, string dir) {
+    return run(sub () { if (!p.parseContent(content, dir)) throw \"EMPTY\"; });
+}
+
+# reads the records of a reader that the host created
+string sub lent_read(VssReadDataProvider r) {
+    return run(sub () { if (!r.searchRecords().next()) throw \"EMPTY\"; });
+}
+
+# uses objects made from data
+string sub from_data(string content, string dir) {
+    return run(sub () {
+        VssVspecParser p(dir);
+        hash<string, hash<VssNode>> nodes = p.parseContent(content, dir);
+        VssTree t(nodes);
+        VssUnitConverter c();
+        if (c.convert(100.0, \"km/h\", \"mph\") < 62.0) throw \"WRONG\";
+        VssReadDataProvider r({\"data\": \"[{\\\"Vehicle.Speed\\\": 1}]\", \"format\": \"json\"});
+        if (!r.searchRecords().next()) throw \"EMPTY\";
+    });
+}
+";
+
+        #! subclasses that would reach the file-system state of the module's classes
+        const SubclassSources = {
+            "VssUnitConverter::loadConfig()": "%modern
+%requires VssLoader
+class Sub inherits VssUnitConverter { constructor(string p) { loadConfig(p); } }
+",
+            "VssReadDataProvider::stored_path": "%modern
+%requires VssDataProvider
+class Sub inherits VssReadDataProvider {
+    static set(VssReadDataProvider r, string p) { r.stored_path = p; }
+}
+",
+        };
+
+        #! a vspec file without includes
+        const Content = "Vehicle:\n  type: branch\n  description: test\n";
+    }
+
+    private {
+        #! the test data directory
+        string dir;
+    }
+
+    constructor() : QUnit::Test("CallerFileAccess", "1.0", \ARGV) {
+        dir = get_script_dir() + "/data";
+%ifndef NoYaml
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("restricted callers, " + m, sub () { testRestricted(m); });
+            addTestCase("lent objects, " + m, sub () { testLent(m); });
+            addTestCase("objects from data, " + m, sub () { testFromData(m); });
+        }
+        addTestCase("subclasses", \testSubclasses());
+%endif
+        set_return_value(main());
+    }
+
+    #! returns the calls with paths: function, description, args
+    private list<list<auto>> getPathCalls() {
+        return (
+            ("tree", "VssTree yaml", (dir + "/vss_v6_subset.yaml",)),
+%ifndef NoJson
+            ("tree", "VssTree json", (dir + "/vss_v6_subset.json",)),
+%endif
+            ("tree", "VssTree vspec", (dir + "/basic.vspec",)),
+            ("converter", "VssUnitConverter", (dir + "/custom_units.yaml",)),
+            ("parse_file", "VssVspecParser::parseFile()", (dir, "basic.vspec")),
+            ("parse_content", "VssVspecParser::parseContent() with an include",
+                (dir, "#include basic.vspec\n" + Content)),
+            ("root", "VssRootDataProvider catalog_path", ({"catalog_path": dir + "/vss_v6_subset.yaml"},)),
+            ("factory", "factory catalog_path", ({"catalog_path": dir + "/vss_v6_subset.yaml"},)),
+            ("read", "VssReadDataProvider path", (dir + "/vss_telemetry.json",)),
+            ("read", "VssReadDataProvider file location", ("file://" + dir + "/vss_telemetry.json",)),
+        );
+    }
+
+    #! paths given by restricted callers are refused before they are used; unrestricted callers use them
+    private testRestricted(string mode) {
+        foreach list<auto> c in (getPathCalls()) {
+            string desc = sprintf("%s %s", c[1], mode);
+            assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunctionArgs(c[0], c[2]), "nofs " + desc);
+            assertEq("FILESYSTEM-ACCESS-DENIED", getProgram("sandbox", mode).callFunctionArgs(c[0], c[2]),
+                "sandbox " + desc);
+            assertEq("ok", getProgram("unrestricted", mode).callFunctionArgs(c[0], c[2]), "unrestricted " + desc);
+        }
+        # any value that is set is checked
+        foreach string path in ("0", "") {
+            assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction("root", {"catalog_path": path}),
+                sprintf("nofs root catalog_path %y %s", path, mode));
+            assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction("factory", {"catalog_path": path}),
+                sprintf("nofs factory catalog_path %y %s", path, mode));
+            assertEq("PERMISSION-DENIED", getProgram("nofs", mode).callFunction("tree", path + ".yaml"),
+                sprintf("nofs tree %y %s", path, mode));
+        }
+    }
+
+    #! paths given by the restricted code that a host-created factory or parser was lent to are refused
+    private testLent(string mode) {
+        hash<auto> opts = {"catalog_path": dir + "/vss_v6_subset.yaml"};
+        foreach string kind in ("nofs", "sandbox", "unrestricted") {
+            string exp = kind == "nofs" ? "PERMISSION-DENIED" : (kind == "sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok");
+            string desc = sprintf("%s lent %s", kind, mode);
+            assertEq(exp, getProgram(kind, mode).callFunction("lent_factory", new VssDataProviderFactory(), opts),
+                "factory " + desc);
+            assertEq(exp, getProgram(kind, mode).callFunction("lent_parse_file", new VssVspecParser(dir),
+                "basic.vspec"), "parseFile " + desc);
+            assertEq(exp, getProgram(kind, mode).callFunction("lent_parse_content", new VssVspecParser(dir),
+                "#include basic.vspec\n" + Content, dir), "parseContent " + desc);
+            # the path of a reader that the host created is the host's
+            assertEq(kind == "sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok", getProgram(kind, mode).callFunction(
+                "lent_read", new VssReadDataProvider({"path": dir + "/vss_telemetry.json"})), "reader " + desc);
+            # content without includes is not a path
+            assertEq("ok", getProgram(kind, mode).callFunction("lent_parse_content", new VssVspecParser(dir),
+                Content, dir), "parseContent without includes " + desc);
+        }
+    }
+
+    #! restricted code cannot reach the file-system state of the module's classes through a subclass
+    private testSubclasses() {
+        foreach hash<auto> i in (SubclassSources.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (i.value, "sub"), i.key);
+        }
+    }
+
+    #! objects made from data work for restricted callers
+    private testFromData(string mode) {
+        foreach string kind in ("nofs", "sandbox", "unrestricted") {
+            assertEq("ok", getProgram(kind, mode).callFunction("from_data", Content, dir), kind + " " + mode);
+        }
+    }
+
+    #! returns a Program of the given kind
+    private Program getProgram(string kind, string mode) {
+        Program p;
+        switch (kind) {
+            case "nofs":
+                p = new Program(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+                break;
+            case "sandbox": {
+                SandboxManager sm();
+                sm.setFilesystemDefaultPolicy(False);
+                p = new Program(PO_NEW_STYLE);
+                p.setSandboxManager(sm);
+                break;
+            }
+            default:
+                p = new Program(PO_NEW_STYLE);
+                break;
+        }
+        p.setExecMode(Modes{mode});
+        p.parse(Source, kind);
+        return p;
+    }
+}

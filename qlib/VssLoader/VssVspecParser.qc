@@ -52,8 +52,9 @@ public class VssVspecParser {
         #! Root directory for path traversal protection (set from the initial parser)
         string root_dir;
 
-        #! Set of already loaded files for circular include detection
-        hash<string, bool> loaded_files;
+        #! The files being parsed (the chain of includes that leads to the current file), for circular include
+        #! detection
+        hash<string, bool> loaded_files = {};
     }
 
     #! Creates a parser with the given base directory
@@ -71,8 +72,14 @@ public class VssVspecParser {
 
         @throw VSS-CIRCULAR-INCLUDE thrown when a circular include is detected
         @throw VSS-PARSE-ERROR thrown when the file cannot be parsed
+        @throw PERMISSION-DENIED the calling code, or the code that a host-created parser was lent to, is restricted
+        from the \c FILESYSTEM functional domain (see @ref vssloader_caller_paths)
     */
     hash<string, hash<VssNode>> parseFile(string filepath) {
+        # the path, and the include directives of the content that the caller gives parseContent(), are the caller's
+        # input, also for the code that a host-created parser was lent to: refused before anything is read if that
+        # code is restricted (issue #4)
+        vss_check_caller_path("vspec file path", filepath, True);
         # resolve to absolute path
         string abs_path;
         if (filepath =~ /^\//) {
@@ -90,11 +97,13 @@ public class VssVspecParser {
                     filepath, abs_path, root_dir);
         }
 
-        # check for circular includes
+        # check for circular includes: a file that includes itself, directly or through other files; a file that
+        # two files include, or that the parser parses again later, is not circular
         if (loaded_files{abs_path}) {
             throw "VSS-CIRCULAR-INCLUDE", sprintf("circular include detected: %y", abs_path);
         }
         loaded_files{abs_path} = True;
+        on_exit remove loaded_files{abs_path};
 
         # read and parse
         string content = ReadOnlyFile::readTextFile(abs_path);
@@ -109,6 +118,9 @@ public class VssVspecParser {
         @return a flat map of VSS path to VssNode
 
         @throw VSS-PARSE-ERROR thrown when the content cannot be parsed
+        @throw PERMISSION-DENIED the content has \c \#include directives and the calling code, or the code that a
+        host-created parser was lent to, is restricted from the \c FILESYSTEM functional domain (see
+        @ref vssloader_caller_paths)
     */
     hash<string, hash<VssNode>> parseContent(string yaml_content, string context_dir) {
         # preprocess: separate #include directives from YAML content
@@ -154,15 +166,12 @@ public class VssVspecParser {
                 inc_path = context_dir + "/" + inc.path;
             }
 
-            # save and restore loaded_files state for the sub-parser
+            # the sub-parser continues the chain of includes
             VssVspecParser sub_parser(dirname(inc_path));
             sub_parser.root_dir = self.root_dir;
             sub_parser.loaded_files = self.loaded_files;
 
             hash<string, hash<VssNode>> inc_nodes = sub_parser.parseFile(basename(inc_path));
-
-            # merge loaded_files back
-            self.loaded_files += sub_parser.loaded_files;
 
             # apply mount point prefix if specified
             if (exists inc.mount_point && inc.mount_point.length()) {

@@ -100,11 +100,17 @@ public class VssRootDataProvider inherits DataProvider::AbstractDataProvider {
     /** @param options hash containing "catalog_path" and optionally "vss_version"
 
         @throw VSS-PROVIDER-ERROR if catalog_path is not provided
+        @throw PERMISSION-DENIED the creating code is restricted from the \c FILESYSTEM functional domain, also when
+        it calls a host-created factory (see @ref vssdp_caller_paths)
     */
-    constructor(hash<auto> options) {
+    constructor(*hash<auto> options) {
         if (!exists options.catalog_path) {
             throw "VSS-PROVIDER-ERROR", "option 'catalog_path' is required";
         }
+        # the catalog path is the creating code's input: refused before anything is read if that code is restricted,
+        # also when it calls a factory that the host created and lent to it, which creates the provider in its
+        # create() method (issue #4)
+        vss_dp_check_caller_path("catalog_path", options.catalog_path, True);
         tree = new VssLoader::VssTree(string(options.catalog_path));
     }
 
