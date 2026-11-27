@@ -116,8 +116,8 @@ module VssLoader {
       host-created parser was lent to is judged too (see @ref Qore::SandboxManager::isLentToRestricted()
       "SandboxManager::isLentToRestricted()")
 
-    Objects created from data (@ref VssLoader::VssTree::constructor(hash<string, hash<VssNode>>, *string) "VssTree"
-    from a node map, the default @ref VssLoader::VssUnitConverter "VssUnitConverter" and content without
+    Objects created from data (@ref VssLoader::VssTree "VssTree" from a node
+    map, the default @ref VssLoader::VssUnitConverter "VssUnitConverter" and content without
     \c \#include directives) work for restricted callers.
 
     @subpage vssloaderreleasenotes

@@ -185,9 +185,10 @@ module VssDataProvider {
     - the paths that the classes of the @ref vssloader_caller_paths "VssLoader" module are given
 
     The \c path option of @ref VssDataProvider::VssReadDataProvider "VssReadDataProvider" is a location that
-    @ref FileLocationHandler::FileLocationHandler "FileLocationHandler" reads when records are searched; it refuses a
+    \c FileLocationHandler reads when records are searched; it refuses a
     caller restricted from a functional domain of the location's handler (\c FILESYSTEM for \c file:// locations
-    and paths), including the code of a provider that restricted code created.  Providers created from data
+    and paths), including the code of a provider that restricted code created; a provider that the host created and
+    gave to restricted code reads the host's path, which its subclasses cannot change.  Providers created from data
     (the \c stream and \c data options of @ref VssDataProvider::VssReadDataProvider "VssReadDataProvider") work for
     restricted callers.
 
